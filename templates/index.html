@@ -159,6 +159,7 @@
       <section class="head">
         <h1>Cerebro2MQTT Configurazione</h1>
         <p>Configura seriale, broker MQTT, polling, schede BUS e riavvio servizi.</p>
+        <p class="small">Nota protocollo: indirizzo scheda 1 e broadcast, usa indirizzi 2..254.</p>
       </section>
 
       <section class="grid">
@@ -327,9 +328,9 @@
         const tdAddress = document.createElement("td");
         const addressInput = document.createElement("input");
         addressInput.type = "number";
-        addressInput.min = "1";
+        addressInput.min = "2";
         addressInput.max = "254";
-        addressInput.value = board.address ?? 1;
+        addressInput.value = board.address ?? 2;
         tdAddress.appendChild(addressInput);
 
         const channelStartValue = board.channel_start ?? board.channel ?? 1;

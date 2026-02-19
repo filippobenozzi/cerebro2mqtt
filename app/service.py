@@ -156,6 +156,12 @@ class BridgeService:
         for board in self._config.boards:
             if not board.enabled:
                 continue
+            if board.address == 1:
+                LOGGER.warning(
+                    "Scheda '%s' con indirizzo 1 ignorata: 1 e broadcast nel protocollo (usa 2..254)",
+                    board.name,
+                )
+                continue
             self._boards_by_topic[board.topic_slug] = board
             self._boards_by_address[board.address].append(board)
 
