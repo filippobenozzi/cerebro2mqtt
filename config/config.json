@@ -1,0 +1,32 @@
+{
+  "serial": {
+    "port": "/dev/ttyUSB0",
+    "baudrate": 9600,
+    "bytesize": 8,
+    "parity": "N",
+    "stopbits": 1,
+    "timeout_sec": 0.25
+  },
+  "mqtt": {
+    "host": "127.0.0.1",
+    "port": 1883,
+    "username": "",
+    "password": "",
+    "client_id": "cerebro2mqtt",
+    "base_topic": "cerebro2mqtt",
+    "discovery_prefix": "homeassistant",
+    "keepalive": 60
+  },
+  "polling": {
+    "interval_sec": 30,
+    "auto_start": true
+  },
+  "web": {
+    "host": "0.0.0.0",
+    "port": 80
+  },
+  "service": {
+    "restart_command": "systemctl restart cerebro2mqtt.service"
+  },
+  "boards": []
+}

@@ -1,0 +1,17 @@
+[Unit]
+Description=Cerebro2MQTT bridge service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/cerebro2mqtt
+Environment=CEREBRO_CONFIG=/opt/cerebro2mqtt/config/config.json
+Environment=LOG_LEVEL=INFO
+ExecStart=/usr/bin/python3 -m app.main
+Restart=always
+RestartSec=2
+User=root
+
+[Install]
+WantedBy=multi-user.target

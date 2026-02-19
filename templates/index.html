@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cerebro2MQTT Config</title>
+    <style>
+      :root {
+        --bg: #f6f6f2;
+        --card: #ffffff;
+        --ink: #1f2a37;
+        --accent: #005f73;
+        --accent-2: #0a9396;
+        --warn: #9b2226;
+        --line: #d7d7d7;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at 20% 20%, #e9f5f5 0, var(--bg) 45%);
+        color: var(--ink);
+      }
+
+      .wrap {
+        max-width: 1100px;
+        margin: 20px auto 40px;
+        padding: 0 14px;
+      }
+
+      .head {
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: linear-gradient(140deg, #ffffff, #f0f8f8);
+      }
+
+      .head h1 {
+        margin: 0 0 8px;
+        font-size: 1.5rem;
+      }
+
+      .head p {
+        margin: 0;
+        opacity: 0.85;
+      }
+
+      .grid {
+        display: grid;
+        gap: 14px;
+        margin-top: 14px;
+      }
+
+      @media (min-width: 960px) {
+        .grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+      }
+
+      .card h2 {
+        margin-top: 0;
+        font-size: 1.05rem;
+      }
+
+      .field {
+        margin-bottom: 10px;
+      }
+
+      .field label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+
+      .field input,
+      .field select {
+        width: 100%;
+        padding: 8px 9px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .rows {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 8px;
+        text-align: left;
+        vertical-align: middle;
+      }
+
+      td input,
+      td select {
+        width: 100%;
+        min-width: 90px;
+      }
+
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 9px 12px;
+        font-weight: 700;
+        cursor: pointer;
+        color: white;
+        background: var(--accent);
+      }
+
+      button.alt {
+        background: var(--accent-2);
+      }
+
+      button.warn {
+        background: var(--warn);
+      }
+
+      button.ghost {
+        background: #7d7d7d;
+      }
+
+      #status {
+        margin-top: 10px;
+        min-height: 24px;
+        font-weight: 700;
+      }
+
+      .small {
+        font-size: 0.9rem;
+        opacity: 0.8;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="head">
+        <h1>Cerebro2MQTT Configurazione</h1>
+        <p>Configura seriale, broker MQTT, polling, schede BUS e riavvio servizi.</p>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>Seriale</h2>
+          <div class="field"><label for="serial_port">Porta</label><input id="serial_port" /></div>
+          <div class="field"><label for="serial_baudrate">Baudrate</label><input id="serial_baudrate" type="number" /></div>
+          <div class="field"><label for="serial_bytesize">Bytesize</label><input id="serial_bytesize" type="number" /></div>
+          <div class="field"><label for="serial_parity">Parity (N/E/O)</label><input id="serial_parity" /></div>
+          <div class="field"><label for="serial_stopbits">Stopbits</label><input id="serial_stopbits" type="number" /></div>
+          <div class="field"><label for="serial_timeout_sec">Timeout sec</label><input id="serial_timeout_sec" type="number" step="0.05" /></div>
+        </article>
+
+        <article class="card">
+          <h2>MQTT</h2>
+          <div class="field"><label for="mqtt_host">Host broker</label><input id="mqtt_host" /></div>
+          <div class="field"><label for="mqtt_port">Porta broker</label><input id="mqtt_port" type="number" /></div>
+          <div class="field"><label for="mqtt_username">Username</label><input id="mqtt_username" /></div>
+          <div class="field"><label for="mqtt_password">Password</label><input id="mqtt_password" type="password" /></div>
+          <div class="field"><label for="mqtt_client_id">Client ID</label><input id="mqtt_client_id" /></div>
+          <div class="field"><label for="mqtt_base_topic">Base topic</label><input id="mqtt_base_topic" /></div>
+          <div class="field"><label for="mqtt_discovery_prefix">HA discovery prefix</label><input id="mqtt_discovery_prefix" /></div>
+        </article>
+
+        <article class="card">
+          <h2>Polling e Web</h2>
+          <div class="field"><label for="polling_interval_sec">Intervallo polling (sec)</label><input id="polling_interval_sec" type="number" /></div>
+          <div class="field">
+            <label for="polling_auto_start">Polling automatico</label>
+            <select id="polling_auto_start">
+              <option value="true">Si</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+          <div class="field"><label for="web_host">Web host</label><input id="web_host" /></div>
+          <div class="field"><label for="web_port">Web porta (default 80)</label><input id="web_port" type="number" /></div>
+        </article>
+
+        <article class="card">
+          <h2>Riavvio servizi</h2>
+          <div class="field">
+            <label for="service_restart_command">Comando riavvio servizio (opzionale)</label>
+            <input id="service_restart_command" placeholder="es: systemctl restart cerebro2mqtt.service" />
+          </div>
+          <p class="small">`Riavvia servizio` usa il comando qui sopra. `Riavvia app` chiude il processo corrente (utile con systemd/docker restart policy).</p>
+          <div class="toolbar">
+            <button class="warn" id="btn_restart_service" type="button">Riavvia servizio</button>
+            <button class="ghost" id="btn_restart_app" type="button">Riavvia app</button>
+            <button class="alt" id="btn_poll" type="button">Polling ora</button>
+          </div>
+        </article>
+      </section>
+
+      <section class="card" style="margin-top: 14px">
+        <h2>Schede BUS</h2>
+        <div class="rows">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Tipo</th>
+                <th>Indirizzo</th>
+                <th>Canale</th>
+                <th>Topic (opzionale)</th>
+                <th>Abilitata</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="board_rows"></tbody>
+          </table>
+        </div>
+
+        <div class="toolbar">
+          <button class="alt" id="btn_add_board" type="button">Aggiungi scheda</button>
+          <button id="btn_save" type="button">Salva configurazione</button>
+        </div>
+
+        <div id="status"></div>
+      </section>
+    </div>
+
+    <script>
+      const TYPES = ["luci", "tapparelle", "termostato", "dimmer"];
+
+      const boardRows = document.getElementById("board_rows");
+      const statusEl = document.getElementById("status");
+
+      let loadedConfig = null;
+
+      function message(text, isError = false) {
+        statusEl.textContent = text;
+        statusEl.style.color = isError ? "#9b2226" : "#005f73";
+      }
+
+      function createTypeSelect(value) {
+        const select = document.createElement("select");
+        for (const type of TYPES) {
+          const opt = document.createElement("option");
+          opt.value = type;
+          opt.textContent = type;
+          if (type === value) opt.selected = true;
+          select.appendChild(opt);
+        }
+        return select;
+      }
+
+      function addBoardRow(board = {}) {
+        const tr = document.createElement("tr");
+        tr.dataset.id = board.id || crypto.randomUUID();
+
+        const tdName = document.createElement("td");
+        const nameInput = document.createElement("input");
+        nameInput.value = board.name || "";
+        tdName.appendChild(nameInput);
+
+        const tdType = document.createElement("td");
+        tdType.appendChild(createTypeSelect(board.type || "luci"));
+
+        const tdAddress = document.createElement("td");
+        const addressInput = document.createElement("input");
+        addressInput.type = "number";
+        addressInput.min = "1";
+        addressInput.max = "254";
+        addressInput.value = board.address ?? 1;
+        tdAddress.appendChild(addressInput);
+
+        const tdChannel = document.createElement("td");
+        const channelInput = document.createElement("input");
+        channelInput.type = "number";
+        channelInput.min = "1";
+        channelInput.max = "8";
+        channelInput.value = board.channel ?? 1;
+        tdChannel.appendChild(channelInput);
+
+        const tdTopic = document.createElement("td");
+        const topicInput = document.createElement("input");
+        topicInput.value = board.topic || "";
+        tdTopic.appendChild(topicInput);
+
+        const tdEnabled = document.createElement("td");
+        const enabledInput = document.createElement("input");
+        enabledInput.type = "checkbox";
+        enabledInput.checked = board.enabled ?? true;
+        tdEnabled.appendChild(enabledInput);
+
+        const tdDelete = document.createElement("td");
+        const delBtn = document.createElement("button");
+        delBtn.textContent = "Elimina";
+        delBtn.className = "warn";
+        delBtn.type = "button";
+        delBtn.onclick = () => tr.remove();
+        tdDelete.appendChild(delBtn);
+
+        tr.appendChild(tdName);
+        tr.appendChild(tdType);
+        tr.appendChild(tdAddress);
+        tr.appendChild(tdChannel);
+        tr.appendChild(tdTopic);
+        tr.appendChild(tdEnabled);
+        tr.appendChild(tdDelete);
+
+        boardRows.appendChild(tr);
+      }
+
+      function setValue(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.value = value;
+      }
+
+      function getValue(id) {
+        return document.getElementById(id).value;
+      }
+
+      function readBoards() {
+        const rows = Array.from(boardRows.querySelectorAll("tr"));
+        return rows.map((tr) => {
+          const cells = tr.querySelectorAll("td");
+          return {
+            id: tr.dataset.id,
+            name: cells[0].querySelector("input").value.trim(),
+            type: cells[1].querySelector("select").value,
+            address: Number(cells[2].querySelector("input").value || 1),
+            channel: Number(cells[3].querySelector("input").value || 1),
+            topic: cells[4].querySelector("input").value.trim(),
+            enabled: cells[5].querySelector("input").checked,
+          };
+        });
+      }
+
+      function buildPayload() {
+        return {
+          serial: {
+            port: getValue("serial_port"),
+            baudrate: Number(getValue("serial_baudrate")),
+            bytesize: Number(getValue("serial_bytesize")),
+            parity: getValue("serial_parity"),
+            stopbits: Number(getValue("serial_stopbits")),
+            timeout_sec: Number(getValue("serial_timeout_sec")),
+          },
+          mqtt: {
+            host: getValue("mqtt_host"),
+            port: Number(getValue("mqtt_port")),
+            username: getValue("mqtt_username"),
+            password: getValue("mqtt_password"),
+            client_id: getValue("mqtt_client_id"),
+            base_topic: getValue("mqtt_base_topic"),
+            discovery_prefix: getValue("mqtt_discovery_prefix"),
+            keepalive: loadedConfig?.mqtt?.keepalive || 60,
+          },
+          polling: {
+            interval_sec: Number(getValue("polling_interval_sec")),
+            auto_start: getValue("polling_auto_start") === "true",
+          },
+          web: {
+            host: getValue("web_host"),
+            port: Number(getValue("web_port")),
+          },
+          service: {
+            restart_command: getValue("service_restart_command"),
+          },
+          boards: readBoards(),
+        };
+      }
+
+      async function loadConfig() {
+        message("Caricamento configurazione...");
+        const res = await fetch("/api/config");
+        if (!res.ok) {
+          message("Errore caricamento configurazione", true);
+          return;
+        }
+        loadedConfig = await res.json();
+
+        setValue("serial_port", loadedConfig.serial.port);
+        setValue("serial_baudrate", loadedConfig.serial.baudrate);
+        setValue("serial_bytesize", loadedConfig.serial.bytesize);
+        setValue("serial_parity", loadedConfig.serial.parity);
+        setValue("serial_stopbits", loadedConfig.serial.stopbits);
+        setValue("serial_timeout_sec", loadedConfig.serial.timeout_sec);
+
+        setValue("mqtt_host", loadedConfig.mqtt.host);
+        setValue("mqtt_port", loadedConfig.mqtt.port);
+        setValue("mqtt_username", loadedConfig.mqtt.username);
+        setValue("mqtt_password", loadedConfig.mqtt.password);
+        setValue("mqtt_client_id", loadedConfig.mqtt.client_id);
+        setValue("mqtt_base_topic", loadedConfig.mqtt.base_topic);
+        setValue("mqtt_discovery_prefix", loadedConfig.mqtt.discovery_prefix);
+
+        setValue("polling_interval_sec", loadedConfig.polling.interval_sec);
+        setValue("polling_auto_start", String(loadedConfig.polling.auto_start));
+
+        setValue("web_host", loadedConfig.web.host);
+        setValue("web_port", loadedConfig.web.port);
+
+        setValue("service_restart_command", loadedConfig.service.restart_command || "");
+
+        boardRows.innerHTML = "";
+        for (const board of loadedConfig.boards || []) {
+          addBoardRow(board);
+        }
+
+        if (!loadedConfig.boards || loadedConfig.boards.length === 0) {
+          addBoardRow();
+        }
+
+        message("Configurazione caricata");
+      }
+
+      async function saveConfig() {
+        const payload = buildPayload();
+        const res = await fetch("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const body = await res.json();
+        if (!res.ok) {
+          message(body.error || "Errore salvataggio", true);
+          return;
+        }
+
+        message(body.message || "Configurazione salvata");
+        await loadConfig();
+      }
+
+      async function callAction(url, mode = null) {
+        const payload = mode ? { mode } : {};
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const body = await res.json();
+        if (!res.ok) {
+          message(body.error || "Operazione fallita", true);
+          return;
+        }
+        message(body.message || "Operazione eseguita");
+      }
+
+      document.getElementById("btn_add_board").onclick = () => addBoardRow();
+      document.getElementById("btn_save").onclick = () => saveConfig();
+      document.getElementById("btn_poll").onclick = () => callAction("/api/poll");
+      document.getElementById("btn_restart_app").onclick = () => callAction("/api/restart", "app");
+      document.getElementById("btn_restart_service").onclick = () => callAction("/api/restart", "service");
+
+      loadConfig();
+    </script>
+  </body>
+</html>

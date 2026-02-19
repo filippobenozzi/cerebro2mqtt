@@ -1,0 +1,14 @@
+services:
+  cerebro2mqtt:
+    build: .
+    container_name: cerebro2mqtt
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      - CEREBRO_CONFIG=/data/config.json
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./data:/data
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0
