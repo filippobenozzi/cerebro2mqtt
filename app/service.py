@@ -333,6 +333,17 @@ class BridgeService:
         if len(board.channels) == 1 or channel == board.primary_channel:
             self._publish(f"{topic_prefix}/state", state, retain=True)
 
+    def _publish_shutter_channel_state(self, board: BoardConfig, channel: int, state: str) -> None:
+        if not board.publish_enabled:
+            return
+        if channel not in board.channels:
+            return
+
+        topic_prefix = self._topic_prefix(board)
+        self._publish(f"{topic_prefix}/ch/{channel}/state", state, retain=True)
+        if len(board.channels) == 1 or channel == board.primary_channel:
+            self._publish(f"{topic_prefix}/state", state, retain=True)
+
     def _handle_non_polling_frame(self, frame: ParsedFrame) -> None:
         boards = self._boards_by_address.get(frame.address, [])
         if not boards:
@@ -535,7 +546,18 @@ class BridgeService:
         self._publish_action_result(board, "light_set", True, f"channel={channel} state={channel_state}")
 
     def _handle_shutter_command(self, board: BoardConfig, command_path: str, payload: str) -> None:
-        if command_path != "set":
+        channel: int | None = None
+
+        if command_path == "set":
+            channel = board.primary_channel
+        else:
+            match = re.fullmatch(r"ch/(\d+)/set", command_path)
+            if not match:
+                return
+            channel = int(match.group(1))
+
+        if channel not in board.channels:
+            LOGGER.warning("Canale tapparella %s fuori range per scheda %s", channel, board.name)
             return
 
         normalized = payload.strip().upper()
@@ -551,7 +573,7 @@ class BridgeService:
         else:
             return
 
-        frame = build_shutter_control(board.address, board.primary_channel, up)
+        frame = build_shutter_control(board.address, channel, up)
         expected_data0 = frame[3]
         expected_data1 = frame[4]
         expected_command = frame[2]
@@ -567,20 +589,19 @@ class BridgeService:
         )
         poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
         if poll_ok and polling is not None:
-            bit = 1 << (board.primary_channel - 1)
+            bit = 1 << (channel - 1)
             is_open = (polling.outputs & bit) != 0
             ok = is_open == up
             self._publish_board_state_from_polling(board, polling)
         else:
             ok = ack_ok
 
-        topic_prefix = self._topic_prefix(board)
         if not ok:
             LOGGER.warning(
                 "Comando tapparella non confermato (board=%s addr=%s ch=%s desired=%s ack_ok=%s poll_ok=%s)",
                 board.name,
                 board.address,
-                board.primary_channel,
+                channel,
                 state,
                 ack_ok,
                 poll_ok,
@@ -589,13 +610,13 @@ class BridgeService:
                 board,
                 "shutter_set",
                 False,
-                f"timeout channel={board.primary_channel} desired={state}",
+                f"timeout channel={channel} desired={state}",
             )
             return
 
         if not poll_ok:
-            self._publish(f"{topic_prefix}/state", state, retain=True)
-        self._publish_action_result(board, "shutter_set", True, state)
+            self._publish_shutter_channel_state(board, channel, state)
+        self._publish_action_result(board, "shutter_set", True, f"channel={channel} state={state}")
 
     def _handle_dimmer_command(self, board: BoardConfig, command_path: str, payload: str) -> None:
         percent: int | None = None
@@ -794,9 +815,10 @@ class BridgeService:
             return
 
         if board.board_type == BoardType.SHUTTERS:
-            bit = 1 << (board.primary_channel - 1)
-            state = "open" if (polling.outputs & bit) else "closed"
-            self._publish(f"{topic_prefix}/state", state, retain=True)
+            for channel in board.channels:
+                bit = 1 << (channel - 1)
+                state = "open" if (polling.outputs & bit) else "closed"
+                self._publish_shutter_channel_state(board, channel, state)
             return
 
         if board.board_type == BoardType.DIMMER:
@@ -878,22 +900,57 @@ class BridgeService:
             return
 
         if board.board_type == BoardType.SHUTTERS:
-            config_topic = f"{discovery_prefix}/cover/cerebro2mqtt_{board.board_id}/config"
-            payload = {
-                "name": board.name,
-                "unique_id": f"cerebro2mqtt_{board.board_id}",
-                "command_topic": f"{topic_prefix}/set",
-                "state_topic": f"{topic_prefix}/state",
-                "payload_open": "OPEN",
-                "payload_close": "CLOSE",
-                "payload_stop": "STOP",
-                "state_open": "open",
-                "state_opening": "opening",
-                "state_closed": "closed",
-                "state_closing": "closing",
-                "device": device,
-            }
-            self._publish(config_topic, payload, retain=True)
+            all_channels = range(1, 5)
+            channels = set(board.channels)
+
+            if len(channels) == 1:
+                config_topic = f"{discovery_prefix}/cover/cerebro2mqtt_{board.board_id}/config"
+                payload = {
+                    "name": board.name,
+                    "unique_id": f"cerebro2mqtt_{board.board_id}",
+                    "command_topic": f"{topic_prefix}/set",
+                    "state_topic": f"{topic_prefix}/state",
+                    "payload_open": "OPEN",
+                    "payload_close": "CLOSE",
+                    "payload_stop": "STOP",
+                    "state_open": "open",
+                    "state_opening": "opening",
+                    "state_closed": "closed",
+                    "state_closing": "closing",
+                    "device": device,
+                }
+                self._publish(config_topic, payload, retain=True)
+
+                for channel in all_channels:
+                    self._publish(
+                        f"{discovery_prefix}/cover/cerebro2mqtt_{board.board_id}_ch{channel}/config",
+                        "",
+                        retain=True,
+                    )
+                return
+
+            self._publish(f"{discovery_prefix}/cover/cerebro2mqtt_{board.board_id}/config", "", retain=True)
+            for channel in all_channels:
+                config_topic = f"{discovery_prefix}/cover/cerebro2mqtt_{board.board_id}_ch{channel}/config"
+                if channel not in channels:
+                    self._publish(config_topic, "", retain=True)
+                    continue
+
+                payload = {
+                    "name": f"{board.name} CH{channel}",
+                    "unique_id": f"cerebro2mqtt_{board.board_id}_ch{channel}",
+                    "command_topic": f"{topic_prefix}/ch/{channel}/set",
+                    "state_topic": f"{topic_prefix}/ch/{channel}/state",
+                    "payload_open": "OPEN",
+                    "payload_close": "CLOSE",
+                    "payload_stop": "STOP",
+                    "state_open": "open",
+                    "state_opening": "opening",
+                    "state_closed": "closed",
+                    "state_closing": "closing",
+                    "device": device,
+                }
+                self._publish(config_topic, payload, retain=True)
             return
 
         if board.board_type == BoardType.DIMMER:
@@ -972,6 +1029,12 @@ class BridgeService:
 
         if board.board_type == BoardType.SHUTTERS:
             self._publish(f"{discovery_prefix}/cover/cerebro2mqtt_{board.board_id}/config", "", retain=True)
+            for channel in range(1, 5):
+                self._publish(
+                    f"{discovery_prefix}/cover/cerebro2mqtt_{board.board_id}_ch{channel}/config",
+                    "",
+                    retain=True,
+                )
             return
 
         if board.board_type == BoardType.DIMMER:

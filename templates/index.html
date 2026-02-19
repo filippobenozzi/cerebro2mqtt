@@ -326,12 +326,15 @@
 
         if (type === "tapparelle") {
           startInput.min = "1";
-          startInput.max = "8";
-        } else {
-          startInput.min = "1";
-          startInput.removeAttribute("max");
+          startInput.max = "4";
+          endInput.min = "1";
+          endInput.max = "4";
+          endInput.disabled = false;
+          return;
         }
 
+        startInput.min = "1";
+        startInput.removeAttribute("max");
         endInput.value = startInput.value || "1";
         endInput.disabled = true;
       }
@@ -434,7 +437,7 @@
           const type = cells[1].querySelector("select").value;
           const channelStart = Number(cells[3].querySelector("input").value || 1);
           const rawChannelEnd = Number(cells[4].querySelector("input").value || channelStart);
-          const channelEnd = type === "luci" ? rawChannelEnd : channelStart;
+          const channelEnd = (type === "luci" || type === "tapparelle") ? rawChannelEnd : channelStart;
 
           return {
             id: tr.dataset.id,

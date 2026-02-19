@@ -108,6 +108,49 @@ class ConfigStoreTest(unittest.TestCase):
             cfg = store.update_from_dict(payload)
             self.assertFalse(cfg.boards[0].publish_enabled)
 
+    def test_accept_shutters_channel_range(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "config.json"
+            store = ConfigStore(path)
+            payload = store.config.to_dict()
+            payload["boards"] = [
+                {
+                    "id": "1",
+                    "name": "Tapparelle Zona Notte",
+                    "type": "tapparelle",
+                    "address": 4,
+                    "channel_start": 1,
+                    "channel_end": 4,
+                    "topic": "tapparelle_zona_notte",
+                    "enabled": True,
+                }
+            ]
+
+            cfg = store.update_from_dict(payload)
+            self.assertEqual(cfg.boards[0].channel_start, 1)
+            self.assertEqual(cfg.boards[0].channel_end, 4)
+
+    def test_reject_invalid_shutters_channel_range(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "config.json"
+            store = ConfigStore(path)
+            payload = store.config.to_dict()
+            payload["boards"] = [
+                {
+                    "id": "1",
+                    "name": "Tapparelle Range Errato",
+                    "type": "tapparelle",
+                    "address": 4,
+                    "channel_start": 1,
+                    "channel_end": 5,
+                    "topic": "tapparelle_errato",
+                    "enabled": True,
+                }
+            ]
+
+            with self.assertRaises(ConfigError):
+                store.update_from_dict(payload)
+
     def test_invalid_serial_values_are_sanitized(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "config.json"

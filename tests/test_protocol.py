@@ -11,6 +11,7 @@ from app.protocol import (
     build_light_control,
     build_polling_extended,
     build_shutter_control,
+    ProtocolError,
     parse_frame,
     parse_polling_status,
 )
@@ -38,6 +39,10 @@ class ProtocolTest(unittest.TestCase):
 
         self.assertEqual(shutter[2], CMD_SHUTTER_CONTROL)
         self.assertEqual(dimmer[2], CMD_DIMMER_CONTROL)
+
+    def test_build_shutter_rejects_channel_out_of_range(self):
+        with self.assertRaises(ProtocolError):
+            build_shutter_control(7, 5, True)
 
     def test_parse_polling_status(self):
         raw = bytes([

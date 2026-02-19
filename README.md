@@ -164,8 +164,10 @@ Base topic default: `cerebro2mqtt`
   - esempio: `cerebro2mqtt/luci_piano_terra/ch/1/set`
 
 - Tapparelle:
-  - cmd: `cerebro2mqtt/<slug>/set` (`OPEN`/`CLOSE`)
-  - state: `cerebro2mqtt/<slug>/state`
+  - cmd per canale: `cerebro2mqtt/<slug>/ch/<canale>/set` (`OPEN`/`CLOSE`)
+  - state per canale: `cerebro2mqtt/<slug>/ch/<canale>/state`
+  - legacy singolo canale: `cerebro2mqtt/<slug>/set` e `cerebro2mqtt/<slug>/state`
+  - range canali supportato in configurazione: `1..4`
 
 - Dimmer:
   - cmd on/off: `cerebro2mqtt/<slug>/set`
@@ -196,7 +198,7 @@ Entita create:
 - Pulsante `Cerebro Polling` (globale)
 - Pulsante polling per ogni scheda
 - `switch` per `luci` (uno per ogni canale nel range configurato)
-- `cover` per `tapparelle`
+- `cover` per `tapparelle` (uno per canale se configuri un range)
 - `light` per `dimmer`
 - `sensor` temperatura + `number` setpoint + `select` stagione per `termostato`
 

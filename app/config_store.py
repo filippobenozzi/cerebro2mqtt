@@ -86,8 +86,12 @@ class ConfigStore:
                 if board.channel_start > board.channel_end:
                     raise ConfigError(f"Range canali non valido per {board.name}: {board.channel_start}-{board.channel_end}")
             elif board.board_type == BoardType.SHUTTERS:
-                if board.channel_start < 1 or board.channel_start > 8:
-                    raise ConfigError(f"Canale non valido per {board.name}: {board.channel_start}")
+                if board.channel_start < 1 or board.channel_start > 4:
+                    raise ConfigError(f"Canale di partenza non valido per {board.name}: {board.channel_start}")
+                if board.channel_end < 1 or board.channel_end > 4:
+                    raise ConfigError(f"Canale finale non valido per {board.name}: {board.channel_end}")
+                if board.channel_start > board.channel_end:
+                    raise ConfigError(f"Range canali non valido per {board.name}: {board.channel_start}-{board.channel_end}")
             else:
                 if board.channel_start < 1:
                     raise ConfigError(f"Canale non valido per {board.name}: {board.channel_start}")

@@ -118,8 +118,8 @@ def build_light_control(address: int, relay_index: int, enabled: bool) -> bytes:
 
 
 def build_shutter_control(address: int, shutter_index: int, up: bool) -> bytes:
-    if shutter_index < 1 or shutter_index > 8:
-        raise ProtocolError("shutter_index deve essere fra 1 e 8")
+    if shutter_index < 1 or shutter_index > 4:
+        raise ProtocolError("shutter_index deve essere fra 1 e 4")
     action = CMD_SHUTTER_DATA_UP if up else CMD_SHUTTER_DATA_DOWN
     return build_frame(address, CMD_SHUTTER_CONTROL, [shutter_index, action])
 

@@ -45,7 +45,7 @@ class BoardConfig:
 
     @property
     def channels(self) -> list[int]:
-        if self.board_type == BoardType.LIGHTS:
+        if self.board_type in (BoardType.LIGHTS, BoardType.SHUTTERS):
             return list(range(self.channel_start, self.channel_end + 1))
         return [self.channel_start]
 
@@ -74,7 +74,7 @@ class BoardConfig:
         legacy_channel = int(data.get("channel", 1))
         channel_start = int(data.get("channel_start", legacy_channel))
         channel_end = int(data.get("channel_end", channel_start))
-        if board_type != BoardType.LIGHTS:
+        if board_type not in (BoardType.LIGHTS, BoardType.SHUTTERS):
             channel_end = channel_start
 
         return BoardConfig(
