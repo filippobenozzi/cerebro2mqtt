@@ -67,7 +67,8 @@ class BridgeService:
         self._dimmer_cache: dict[str, int] = {}
         self._ack_lock = threading.Lock()
         self._ack_waiters: list[_AckWaiter] = []
-        self._transaction_lock = threading.Lock()
+        self._address_locks_guard = threading.Lock()
+        self._address_locks: dict[int, threading.Lock] = {}
 
         self._rebuild_indexes()
 
@@ -236,7 +237,7 @@ class BridgeService:
         matcher: Callable[[ParsedFrame], bool],
         timeout: float,
     ) -> tuple[bool, ParsedFrame | None]:
-        with self._transaction_lock:
+        with self._get_address_lock(address):
             waiter = _AckWaiter(address=address, matcher=matcher)
             with self._ack_lock:
                 self._ack_waiters.append(waiter)
@@ -252,6 +253,14 @@ class BridgeService:
                 return False, None
 
             return True, waiter.frame
+
+    def _get_address_lock(self, address: int) -> threading.Lock:
+        with self._address_locks_guard:
+            lock = self._address_locks.get(address)
+            if lock is None:
+                lock = threading.Lock()
+                self._address_locks[address] = lock
+            return lock
 
     def _discard_waiter(self, waiter: _AckWaiter) -> None:
         with self._ack_lock:
@@ -413,6 +422,7 @@ class BridgeService:
         base = self._config.mqtt.base_topic
 
         if topic == f"{base}/poll_all/set":
+            LOGGER.info("MQTT comando ricevuto: %s payload=%s", topic, payload)
             self.trigger_poll_all()
             return
 
@@ -429,9 +439,13 @@ class BridgeService:
 
         board = self._boards_by_topic.get(board_slug)
         if board is None:
+            LOGGER.debug("MQTT topic ignorato (scheda sconosciuta): %s", topic)
             return
-        if not board.publish_enabled:
+        if not board.enabled:
+            LOGGER.info("MQTT topic ignorato (scheda disabilitata): %s", topic)
             return
+
+        LOGGER.info("MQTT comando ricevuto: %s payload=%s (board=%s addr=%s)", topic, payload, board.name, board.address)
 
         if command_path == "poll/set":
             self.trigger_poll_for_board(board)
@@ -494,6 +508,15 @@ class BridgeService:
 
         channel_state = "ON" if state else "OFF"
         if not ok:
+            LOGGER.warning(
+                "Comando luce non confermato (board=%s addr=%s ch=%s desired=%s ack_ok=%s poll_ok=%s)",
+                board.name,
+                board.address,
+                channel,
+                channel_state,
+                ack_ok,
+                poll_ok,
+            )
             self._publish_action_result(
                 board,
                 "light_set",
@@ -551,6 +574,15 @@ class BridgeService:
 
         topic_prefix = self._topic_prefix(board)
         if not ok:
+            LOGGER.warning(
+                "Comando tapparella non confermato (board=%s addr=%s ch=%s desired=%s ack_ok=%s poll_ok=%s)",
+                board.name,
+                board.address,
+                board.primary_channel,
+                state,
+                ack_ok,
+                poll_ok,
+            )
             self._publish_action_result(
                 board,
                 "shutter_set",
@@ -616,6 +648,14 @@ class BridgeService:
         topic_prefix = self._topic_prefix(board)
         brightness_255 = int(round((percent / 100.0) * 255))
         if not ok:
+            LOGGER.warning(
+                "Comando dimmer non confermato (board=%s addr=%s desired_percent=%s ack_ok=%s poll_ok=%s)",
+                board.name,
+                board.address,
+                percent,
+                ack_ok,
+                poll_ok,
+            )
             self._publish_action_result(board, "dimmer_set", False, f"timeout desired_percent={percent}")
             return
 
@@ -653,6 +693,14 @@ class BridgeService:
             else:
                 ok = ack_ok
             if not ok:
+                LOGGER.warning(
+                    "Comando setpoint non confermato (board=%s addr=%s desired=%s ack_ok=%s poll_ok=%s)",
+                    board.name,
+                    board.address,
+                    round(setpoint, 1),
+                    ack_ok,
+                    poll_ok,
+                )
                 self._publish_action_result(board, "setpoint_set", False, f"timeout desired={round(setpoint, 1)}")
                 return
 
@@ -681,6 +729,14 @@ class BridgeService:
             else:
                 ok = ack_ok
             if not ok:
+                LOGGER.warning(
+                    "Comando season non confermato (board=%s addr=%s desired=%s ack_ok=%s poll_ok=%s)",
+                    board.name,
+                    board.address,
+                    season,
+                    ack_ok,
+                    poll_ok,
+                )
                 self._publish_action_result(board, "season_set", False, f"timeout desired={season}")
                 return
 
