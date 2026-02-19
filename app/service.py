@@ -779,7 +779,8 @@ class BridgeService:
             "season": polling.season,
             "address": board.address,
         }
-        self._publish(f"{topic_prefix}/polling/raw", raw_payload, retain=False)
+        # Retained: usato anche dal sensore temperatura termostato in discovery.
+        self._publish(f"{topic_prefix}/polling/raw", raw_payload, retain=True)
 
         if board.board_type == BoardType.LIGHTS:
             channels = board.channels
@@ -916,9 +917,11 @@ class BridgeService:
             temp_sensor_payload = {
                 "name": f"{board.name} Temperatura",
                 "unique_id": f"cerebro2mqtt_{board.board_id}_temperature",
-                "state_topic": f"{topic_prefix}/temperature/state",
-                "unit_of_measurement": "C",
+                "state_topic": f"{topic_prefix}/polling/raw",
+                "value_template": "{{ value_json.temperature }}",
+                "unit_of_measurement": "°C",
                 "device_class": "temperature",
+                "state_class": "measurement",
                 "device": device,
             }
             self._publish(temp_sensor_topic, temp_sensor_payload, retain=True)
