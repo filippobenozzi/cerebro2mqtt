@@ -185,6 +185,7 @@ Base topic default: `cerebro2mqtt`
 
 Per debug polling grezzo:
 - `cerebro2mqtt/<slug>/polling/raw`
+- disponibilita scheda: `cerebro2mqtt/<slug>/availability` (`online`/`offline`)
 
 Esito azioni (ack dal BUS):
 - `cerebro2mqtt/<slug>/action/result` (JSON con `action`, `success`, `detail`)
@@ -193,6 +194,7 @@ Esito azioni (ack dal BUS):
 
 Il bridge pubblica automaticamente discovery su `homeassistant/.../config` con payload retained.
 Se una scheda ha `publish_enabled=false`, le entita discovery di quella scheda vengono rimosse.
+Ogni entita usa `availability_topic` e viene segnata `offline` se il polling della scheda fallisce.
 
 Entita create:
 

@@ -65,6 +65,7 @@ class BridgeService:
 
         self._boards_by_topic: dict[str, BoardConfig] = {}
         self._boards_by_address: dict[int, list[BoardConfig]] = defaultdict(list)
+        self._board_online: dict[str, bool] = {}
         self._dimmer_cache: dict[str, int] = {}
         self._ack_lock = threading.Lock()
         self._ack_waiters: list[_AckWaiter] = []
@@ -162,14 +163,17 @@ class BridgeService:
         self._poll_worker = None
 
     def _rebuild_indexes(self) -> None:
+        previous_online = self._board_online
         self._boards_by_topic = {}
         self._boards_by_address = defaultdict(list)
+        self._board_online = {}
 
         for board in self._config.boards:
             if not board.enabled:
                 continue
             self._boards_by_topic[board.topic_slug] = board
             self._boards_by_address[board.address].append(board)
+            self._board_online[board.board_id] = previous_online.get(board.board_id, False)
 
     def _poll_loop(self) -> None:
         while not self._shutdown_event.is_set():
@@ -221,6 +225,7 @@ class BridgeService:
         boards = self._boards_by_address.get(address, [])
         for board in boards:
             self._publish_poll_result(board, ok)
+            self._set_board_availability(board, ok)
 
         if not ok:
             LOGGER.warning("Polling timeout su indirizzo %s", address)
@@ -292,11 +297,41 @@ class BridgeService:
     def _topic_prefix(self, board: BoardConfig) -> str:
         return f"{self._config.mqtt.base_topic}/{board.topic_slug}"
 
+    def _availability_topic(self, board: BoardConfig) -> str:
+        return f"{self._topic_prefix(board)}/availability"
+
     def _publish(self, topic: str, payload: str | int | float | dict, retain: bool = False) -> None:
         mqtt = self._mqtt
         if mqtt is None:
             return
         mqtt.publish(topic, payload, retain=retain)
+
+    def _set_board_availability(self, board: BoardConfig, online: bool, force: bool = False) -> None:
+        if not board.publish_enabled:
+            return
+
+        current = self._board_online.get(board.board_id)
+        if not force and current == online:
+            return
+
+        self._board_online[board.board_id] = online
+        self._publish(
+            self._availability_topic(board),
+            "online" if online else "offline",
+            retain=True,
+        )
+
+    def _set_address_availability(self, address: int, online: bool, force: bool = False) -> None:
+        boards = self._boards_by_address.get(address, [])
+        for board in boards:
+            self._set_board_availability(board, online, force=force)
+
+    def _publish_all_availability(self, force: bool = False) -> None:
+        with self._lock:
+            boards = [board for board in self._config.boards if board.enabled and board.publish_enabled]
+
+        for board in boards:
+            self._set_board_availability(board, self._board_online.get(board.board_id, False), force=force)
 
     def _publish_action_result(self, board: BoardConfig, action: str, success: bool, detail: str) -> None:
         if not board.publish_enabled:
@@ -416,18 +451,22 @@ class BridgeService:
             timeout=timeout,
         )
         if not ok or rx is None:
+            self._set_address_availability(address, False)
             return False, None
 
         try:
             polling = parse_polling_status(rx)
         except Exception:
             LOGGER.exception("Errore parsing polling durante conferma comando")
+            self._set_address_availability(address, False)
             return False, None
 
+        self._set_address_availability(address, True)
         return True, polling
 
     def _handle_mqtt_connected(self) -> None:
         self._publish_discovery()
+        self._publish_all_availability(force=True)
         self.trigger_poll_all()
 
     def _handle_mqtt_command(self, topic: str, payload: str) -> None:
@@ -780,6 +819,9 @@ class BridgeService:
 
     def _handle_serial_frame(self, frame: ParsedFrame) -> None:
         self._resolve_waiters(frame)
+        boards = self._boards_by_address.get(frame.address, [])
+        if boards:
+            self._set_address_availability(frame.address, True)
 
         if frame.command not in (CMD_POLLING_EXTENDED, CMD_POLLING_RESPONSE):
             self._handle_non_polling_frame(frame)
@@ -791,7 +833,6 @@ class BridgeService:
             LOGGER.exception("Errore parsing polling")
             return
 
-        boards = self._boards_by_address.get(frame.address, [])
         for board in boards:
             self._publish_board_state_from_polling(board, polling)
 
@@ -877,6 +918,7 @@ class BridgeService:
         discovery_prefix = self._config.mqtt.discovery_prefix
         slug = board.topic_slug
         topic_prefix = f"{base}/{slug}"
+        availability_topic = self._availability_topic(board)
         device = {
             "identifiers": [f"cerebro2mqtt_{board.board_id}"],
             "name": board.name,
@@ -891,6 +933,9 @@ class BridgeService:
             "command_topic": f"{topic_prefix}/poll/set",
             "payload_press": "PRESS",
             "icon": "mdi:refresh",
+            "availability_topic": availability_topic,
+            "payload_available": "online",
+            "payload_not_available": "offline",
             "device": device,
         }
         self._publish(poll_button_topic, poll_button_payload, retain=True)
@@ -918,6 +963,9 @@ class BridgeService:
                     "state_topic": f"{topic_prefix}/ch/{channel}/state",
                     "payload_on": "ON",
                     "payload_off": "OFF",
+                    "availability_topic": availability_topic,
+                    "payload_available": "online",
+                    "payload_not_available": "offline",
                     "device": device,
                 }
                 self._publish(config_topic, payload, retain=True)
@@ -942,6 +990,9 @@ class BridgeService:
                     "state_closed": "closed",
                     "state_closing": "closing",
                     "state_stopped": "stopped",
+                    "availability_topic": availability_topic,
+                    "payload_available": "online",
+                    "payload_not_available": "offline",
                     "device": device,
                 }
                 self._publish(config_topic, payload, retain=True)
@@ -974,6 +1025,9 @@ class BridgeService:
                     "state_closed": "closed",
                     "state_closing": "closing",
                     "state_stopped": "stopped",
+                    "availability_topic": availability_topic,
+                    "payload_available": "online",
+                    "payload_not_available": "offline",
                     "device": device,
                 }
                 self._publish(config_topic, payload, retain=True)
@@ -990,6 +1044,9 @@ class BridgeService:
                 "brightness_state_topic": f"{topic_prefix}/brightness/state",
                 "payload_on": "ON",
                 "payload_off": "OFF",
+                "availability_topic": availability_topic,
+                "payload_available": "online",
+                "payload_not_available": "offline",
                 "device": device,
             }
             self._publish(config_topic, payload, retain=True)
@@ -1005,6 +1062,9 @@ class BridgeService:
                 "unit_of_measurement": "°C",
                 "device_class": "temperature",
                 "state_class": "measurement",
+                "availability_topic": availability_topic,
+                "payload_available": "online",
+                "payload_not_available": "offline",
                 "device": device,
             }
             self._publish(temp_sensor_topic, temp_sensor_payload, retain=True)
@@ -1023,6 +1083,9 @@ class BridgeService:
                 "max_temp": 35,
                 "temp_step": 0.5,
                 "temperature_unit": "C",
+                "availability_topic": availability_topic,
+                "payload_available": "online",
+                "payload_not_available": "offline",
                 "device": device,
             }
             self._publish(climate_topic, climate_payload, retain=True)
