@@ -39,6 +39,7 @@ from app.serial_bridge import SerialBridge
 
 LOGGER = logging.getLogger(__name__)
 COMMAND_ACK_TIMEOUT_SEC = 2.0
+POLL_OFFLINE_AFTER_FAILURES = 3
 
 
 @dataclass
@@ -66,6 +67,7 @@ class BridgeService:
         self._boards_by_topic: dict[str, BoardConfig] = {}
         self._boards_by_address: dict[int, list[BoardConfig]] = defaultdict(list)
         self._board_online: dict[str, bool] = {}
+        self._address_poll_failures: dict[int, int] = {}
         self._dimmer_cache: dict[str, int] = {}
         self._ack_lock = threading.Lock()
         self._ack_waiters: list[_AckWaiter] = []
@@ -164,9 +166,11 @@ class BridgeService:
 
     def _rebuild_indexes(self) -> None:
         previous_online = self._board_online
+        previous_failures = self._address_poll_failures
         self._boards_by_topic = {}
         self._boards_by_address = defaultdict(list)
         self._board_online = {}
+        self._address_poll_failures = {}
 
         for board in self._config.boards:
             if not board.enabled:
@@ -174,6 +178,7 @@ class BridgeService:
             self._boards_by_topic[board.topic_slug] = board
             self._boards_by_address[board.address].append(board)
             self._board_online[board.board_id] = previous_online.get(board.board_id, False)
+            self._address_poll_failures[board.address] = previous_failures.get(board.address, 0)
 
     def _poll_loop(self) -> None:
         while not self._shutdown_event.is_set():
@@ -205,30 +210,49 @@ class BridgeService:
 
     def _send_poll(self, address: int) -> None:
         frame = build_polling_extended(address)
-        ok, rx = self._send_with_ack(
+        ack_ok, rx = self._send_with_ack(
             frame=frame,
             address=address,
             matcher=lambda rx: rx.command in (CMD_POLLING_EXTENDED, CMD_POLLING_RESPONSE),
             timeout=COMMAND_ACK_TIMEOUT_SEC,
         )
+        got_response = ack_ok and rx is not None
+        poll_ok = False
 
-        if ok and rx is not None:
+        if got_response:
             try:
                 polling = parse_polling_status(rx)
                 boards = self._boards_by_address.get(address, [])
                 for board in boards:
                     self._publish_board_state_from_polling(board, polling)
+                poll_ok = True
             except Exception:
                 LOGGER.exception("Errore parsing polling su indirizzo %s", address)
-                ok = False
+
+        if got_response:
+            self._address_poll_failures[address] = 0
+        else:
+            self._address_poll_failures[address] = self._address_poll_failures.get(address, 0) + 1
+
+        failure_count = self._address_poll_failures.get(address, 0)
 
         boards = self._boards_by_address.get(address, [])
         for board in boards:
-            self._publish_poll_result(board, ok)
-            self._set_board_availability(board, ok)
+            self._publish_poll_result(board, poll_ok)
+            if got_response:
+                self._set_board_availability(board, True)
+            elif failure_count >= POLL_OFFLINE_AFTER_FAILURES:
+                self._set_board_availability(board, False)
 
-        if not ok:
-            LOGGER.warning("Polling timeout su indirizzo %s", address)
+        if not got_response:
+            LOGGER.warning(
+                "Polling timeout su indirizzo %s (consecutivi=%s, offline da %s)",
+                address,
+                failure_count,
+                POLL_OFFLINE_AFTER_FAILURES,
+            )
+        elif not poll_ok:
+            LOGGER.warning("Polling ricevuto ma non valido su indirizzo %s", address)
 
     def _send_frame(self, frame: bytes) -> bool:
         serial = self._serial
@@ -451,17 +475,14 @@ class BridgeService:
             timeout=timeout,
         )
         if not ok or rx is None:
-            self._set_address_availability(address, False)
             return False, None
 
         try:
             polling = parse_polling_status(rx)
         except Exception:
             LOGGER.exception("Errore parsing polling durante conferma comando")
-            self._set_address_availability(address, False)
             return False, None
 
-        self._set_address_availability(address, True)
         return True, polling
 
     def _handle_mqtt_connected(self) -> None:
@@ -821,6 +842,7 @@ class BridgeService:
         self._resolve_waiters(frame)
         boards = self._boards_by_address.get(frame.address, [])
         if boards:
+            self._address_poll_failures[frame.address] = 0
             self._set_address_availability(frame.address, True)
 
         if frame.command not in (CMD_POLLING_EXTENDED, CMD_POLLING_RESPONSE):

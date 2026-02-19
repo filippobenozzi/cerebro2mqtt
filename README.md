@@ -194,7 +194,7 @@ Esito azioni (ack dal BUS):
 
 Il bridge pubblica automaticamente discovery su `homeassistant/.../config` con payload retained.
 Se una scheda ha `publish_enabled=false`, le entita discovery di quella scheda vengono rimosse.
-Ogni entita usa `availability_topic` e viene segnata `offline` se il polling della scheda fallisce.
+Ogni entita usa `availability_topic`: torna `online` appena arriva una risposta/frame dalla scheda e passa `offline` dopo timeout polling consecutivi (default 3).
 
 Entita create:
 
