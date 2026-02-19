@@ -67,6 +67,7 @@ class BridgeService:
         self._dimmer_cache: dict[str, int] = {}
         self._ack_lock = threading.Lock()
         self._ack_waiters: list[_AckWaiter] = []
+        self._transaction_lock = threading.Lock()
 
         self._rebuild_indexes()
 
@@ -198,12 +199,22 @@ class BridgeService:
 
     def _send_poll(self, address: int) -> None:
         frame = build_polling_extended(address)
-        ok, _ = self._send_with_ack(
+        ok, rx = self._send_with_ack(
             frame=frame,
             address=address,
             matcher=lambda rx: rx.command in (CMD_POLLING_EXTENDED, CMD_POLLING_RESPONSE),
             timeout=COMMAND_ACK_TIMEOUT_SEC,
         )
+
+        if ok and rx is not None:
+            try:
+                polling = parse_polling_status(rx)
+                boards = self._boards_by_address.get(address, [])
+                for board in boards:
+                    self._publish_board_state_from_polling(board, polling)
+            except Exception:
+                LOGGER.exception("Errore parsing polling su indirizzo %s", address)
+                ok = False
 
         boards = self._boards_by_address.get(address, [])
         for board in boards:
@@ -225,21 +236,22 @@ class BridgeService:
         matcher: Callable[[ParsedFrame], bool],
         timeout: float,
     ) -> tuple[bool, ParsedFrame | None]:
-        waiter = _AckWaiter(address=address, matcher=matcher)
-        with self._ack_lock:
-            self._ack_waiters.append(waiter)
+        with self._transaction_lock:
+            waiter = _AckWaiter(address=address, matcher=matcher)
+            with self._ack_lock:
+                self._ack_waiters.append(waiter)
 
-        sent = self._send_frame(frame)
-        if not sent:
-            self._discard_waiter(waiter)
-            return False, None
+            sent = self._send_frame(frame)
+            if not sent:
+                self._discard_waiter(waiter)
+                return False, None
 
-        completed = waiter.event.wait(timeout)
-        if not completed:
-            self._discard_waiter(waiter)
-            return False, None
+            completed = waiter.event.wait(timeout)
+            if not completed:
+                self._discard_waiter(waiter)
+                return False, None
 
-        return True, waiter.frame
+            return True, waiter.frame
 
     def _discard_waiter(self, waiter: _AckWaiter) -> None:
         with self._ack_lock:
@@ -464,21 +476,21 @@ class BridgeService:
         frame = build_light_control(board.address, channel, state)
         expected_data0 = frame[3]
         expected_command = frame[2]
-        ok, _ = self._send_with_ack(
+        ack_ok, _ = self._send_with_ack(
             frame=frame,
             address=board.address,
             matcher=lambda rx: rx.command == expected_command and rx.data[0] == expected_data0,
             timeout=COMMAND_ACK_TIMEOUT_SEC,
         )
 
-        if not ok:
-            poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
-            if poll_ok and polling is not None:
-                bit = 1 << (channel - 1)
-                is_on = (polling.outputs & bit) != 0
-                ok = is_on == state
-                if ok:
-                    self._publish_board_state_from_polling(board, polling)
+        poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
+        if poll_ok and polling is not None:
+            bit = 1 << (channel - 1)
+            is_on = (polling.outputs & bit) != 0
+            ok = is_on == state
+            self._publish_board_state_from_polling(board, polling)
+        else:
+            ok = ack_ok
 
         channel_state = "ON" if state else "OFF"
         if not ok:
@@ -490,8 +502,9 @@ class BridgeService:
             )
             return
 
-        self._publish_light_channel_state(board, channel, state)
-        if publish_legacy_state:
+        if not poll_ok:
+            self._publish_light_channel_state(board, channel, state)
+        if publish_legacy_state and not poll_ok:
             topic_prefix = self._topic_prefix(board)
             self._publish(f"{topic_prefix}/state", channel_state, retain=True)
         self._publish_action_result(board, "light_set", True, f"channel={channel} state={channel_state}")
@@ -517,7 +530,7 @@ class BridgeService:
         expected_data0 = frame[3]
         expected_data1 = frame[4]
         expected_command = frame[2]
-        ok, _ = self._send_with_ack(
+        ack_ok, _ = self._send_with_ack(
             frame=frame,
             address=board.address,
             matcher=lambda rx: (
@@ -527,14 +540,14 @@ class BridgeService:
             ),
             timeout=COMMAND_ACK_TIMEOUT_SEC,
         )
-        if not ok:
-            poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
-            if poll_ok and polling is not None:
-                bit = 1 << (board.primary_channel - 1)
-                is_open = (polling.outputs & bit) != 0
-                ok = is_open == up
-                if ok:
-                    self._publish_board_state_from_polling(board, polling)
+        poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
+        if poll_ok and polling is not None:
+            bit = 1 << (board.primary_channel - 1)
+            is_open = (polling.outputs & bit) != 0
+            ok = is_open == up
+            self._publish_board_state_from_polling(board, polling)
+        else:
+            ok = ack_ok
 
         topic_prefix = self._topic_prefix(board)
         if not ok:
@@ -546,7 +559,8 @@ class BridgeService:
             )
             return
 
-        self._publish(f"{topic_prefix}/state", state, retain=True)
+        if not poll_ok:
+            self._publish(f"{topic_prefix}/state", state, retain=True)
         self._publish_action_result(board, "shutter_set", True, state)
 
     def _handle_dimmer_command(self, board: BoardConfig, command_path: str, payload: str) -> None:
@@ -575,7 +589,7 @@ class BridgeService:
         expected_command = frame[2]
         expected_data0 = frame[3]
         expected_data1 = frame[4]
-        ok, _ = self._send_with_ack(
+        ack_ok, _ = self._send_with_ack(
             frame=frame,
             address=board.address,
             matcher=lambda rx: (
@@ -585,16 +599,16 @@ class BridgeService:
             ),
             timeout=COMMAND_ACK_TIMEOUT_SEC,
         )
-        if not ok:
-            poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
-            if poll_ok and polling is not None:
-                expected_bus = percent_to_bus_dimmer(percent)
-                # Alcune schede riportano 9 come 10 nel polling esteso.
-                observed_bus = 10 if polling.dimmer_0_10 >= 9 else polling.dimmer_0_10
-                wanted_bus = 10 if expected_bus >= 9 else expected_bus
-                ok = observed_bus == wanted_bus
-                if ok:
-                    self._publish_board_state_from_polling(board, polling)
+        poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
+        if poll_ok and polling is not None:
+            expected_bus = percent_to_bus_dimmer(percent)
+            # Alcune schede riportano 9 come 10 nel polling esteso.
+            observed_bus = 10 if polling.dimmer_0_10 >= 9 else polling.dimmer_0_10
+            wanted_bus = 10 if expected_bus >= 9 else expected_bus
+            ok = observed_bus == wanted_bus
+            self._publish_board_state_from_polling(board, polling)
+        else:
+            ok = ack_ok
 
         if percent > 0:
             self._dimmer_cache[board.board_id] = percent
@@ -605,8 +619,9 @@ class BridgeService:
             self._publish_action_result(board, "dimmer_set", False, f"timeout desired_percent={percent}")
             return
 
-        self._publish(f"{topic_prefix}/state", "ON" if percent > 0 else "OFF", retain=True)
-        self._publish(f"{topic_prefix}/brightness/state", brightness_255, retain=True)
+        if not poll_ok:
+            self._publish(f"{topic_prefix}/state", "ON" if percent > 0 else "OFF", retain=True)
+            self._publish(f"{topic_prefix}/brightness/state", brightness_255, retain=True)
         self._publish_action_result(board, "dimmer_set", True, f"percent={percent}")
 
     def _handle_thermostat_command(self, board: BoardConfig, command_path: str, payload: str) -> None:
@@ -620,7 +635,7 @@ class BridgeService:
             expected_command = frame[2]
             expected_data0 = frame[3]
             expected_data1 = frame[4]
-            ok, _ = self._send_with_ack(
+            ack_ok, _ = self._send_with_ack(
                 frame=frame,
                 address=board.address,
                 matcher=lambda rx: (
@@ -630,18 +645,19 @@ class BridgeService:
                 ),
                 timeout=COMMAND_ACK_TIMEOUT_SEC,
             )
-            if not ok:
-                poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
-                if poll_ok and polling is not None:
-                    # Il polling potrebbe arrotondare il decimale del setpoint.
-                    ok = abs(polling.temperature_setpoint - setpoint) <= 0.6
-                    if ok:
-                        self._publish_board_state_from_polling(board, polling)
+            poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
+            if poll_ok and polling is not None:
+                # Il polling potrebbe arrotondare il decimale del setpoint.
+                ok = abs(polling.temperature_setpoint - setpoint) <= 0.6
+                self._publish_board_state_from_polling(board, polling)
+            else:
+                ok = ack_ok
             if not ok:
                 self._publish_action_result(board, "setpoint_set", False, f"timeout desired={round(setpoint, 1)}")
                 return
 
-            self._publish(f"{topic_prefix}/setpoint/state", round(setpoint, 1), retain=True)
+            if not poll_ok:
+                self._publish(f"{topic_prefix}/setpoint/state", round(setpoint, 1), retain=True)
             self._publish_action_result(board, "setpoint_set", True, f"setpoint={round(setpoint, 1)}")
             return
 
@@ -652,23 +668,24 @@ class BridgeService:
             frame = build_set_season(board.address, season)
             expected_command = frame[2]
             expected_data0 = frame[3]
-            ok, _ = self._send_with_ack(
+            ack_ok, _ = self._send_with_ack(
                 frame=frame,
                 address=board.address,
                 matcher=lambda rx: rx.command == expected_command and rx.data[0] == expected_data0,
                 timeout=COMMAND_ACK_TIMEOUT_SEC,
             )
-            if not ok:
-                poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
-                if poll_ok and polling is not None:
-                    ok = polling.season == season
-                    if ok:
-                        self._publish_board_state_from_polling(board, polling)
+            poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
+            if poll_ok and polling is not None:
+                ok = polling.season == season
+                self._publish_board_state_from_polling(board, polling)
+            else:
+                ok = ack_ok
             if not ok:
                 self._publish_action_result(board, "season_set", False, f"timeout desired={season}")
                 return
 
-            self._publish(f"{topic_prefix}/season/state", "SUMMER" if season == 1 else "WINTER", retain=True)
+            if not poll_ok:
+                self._publish(f"{topic_prefix}/season/state", "SUMMER" if season == 1 else "WINTER", retain=True)
             self._publish_action_result(board, "season_set", True, f"season={season}")
 
     def _handle_serial_frame(self, frame: ParsedFrame) -> None:
