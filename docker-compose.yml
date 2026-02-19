@@ -6,9 +6,9 @@ services:
     ports:
       - "80:80"
     environment:
-      - CEREBRO_CONFIG=/data/config.json
+      - CEREBRO_CONFIG=/config/config.json
       - LOG_LEVEL=INFO
     volumes:
-      - ./data:/data
+      - ./data:/config
     devices:
       - /dev/ttyUSB0:/dev/ttyUSB0

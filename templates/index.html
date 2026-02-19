@@ -234,6 +234,7 @@
         <div class="toolbar">
           <button class="alt" id="btn_add_board" type="button">Aggiungi scheda</button>
           <button id="btn_save" type="button">Salva configurazione</button>
+          <button class="ghost" id="btn_export" type="button">Scarica JSON</button>
         </div>
 
         <div id="status"></div>
@@ -265,9 +266,26 @@
         return select;
       }
 
+      function makeBoardId() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+          return window.crypto.randomUUID();
+        }
+
+        if (window.crypto && typeof window.crypto.getRandomValues === "function") {
+          const bytes = new Uint8Array(16);
+          window.crypto.getRandomValues(bytes);
+          bytes[6] = (bytes[6] & 0x0f) | 0x40;
+          bytes[8] = (bytes[8] & 0x3f) | 0x80;
+          const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+          return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+        }
+
+        return `board_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
+      }
+
       function addBoardRow(board = {}) {
         const tr = document.createElement("tr");
-        tr.dataset.id = board.id || crypto.randomUUID();
+        tr.dataset.id = board.id || makeBoardId();
 
         const tdName = document.createElement("td");
         const nameInput = document.createElement("input");
@@ -462,6 +480,7 @@
 
       document.getElementById("btn_add_board").onclick = () => addBoardRow();
       document.getElementById("btn_save").onclick = () => saveConfig();
+      document.getElementById("btn_export").onclick = () => { window.location.href = "/api/config/download"; };
       document.getElementById("btn_poll").onclick = () => callAction("/api/poll");
       document.getElementById("btn_restart_app").onclick = () => callAction("/api/restart", "app");
       document.getElementById("btn_restart_service").onclick = () => callAction("/api/restart", "service");

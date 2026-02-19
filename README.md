@@ -42,6 +42,8 @@ Web UI su `http://<host>:80`.
 docker compose up -d --build
 ```
 
+La configurazione JSON viene salvata fuori dal container in `./data/config.json` (bind mount host `./data:/config`).
+Nella web UI puoi anche scaricare il file con il pulsante `Scarica JSON`.
 Nel `docker-compose.yml` modifica il device seriale se necessario.
 
 ## Deploy systemd (Raspberry)

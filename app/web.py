@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_file
 
 from app.config_store import ConfigError, ConfigStore
 from app.service import BridgeService
@@ -36,6 +36,15 @@ def create_web_app(store: ConfigStore, service: BridgeService) -> Flask:
         except Exception:
             LOGGER.exception("Errore salvataggio configurazione")
             return jsonify({"error": "Errore interno salvataggio configurazione"}), 500
+
+    @app.get("/api/config/download")
+    def download_config():
+        return send_file(
+            store.path,
+            as_attachment=True,
+            download_name=store.path.name,
+            mimetype="application/json",
+        )
 
     @app.post("/api/poll")
     def run_poll():
