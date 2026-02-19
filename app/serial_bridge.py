@@ -8,7 +8,14 @@ from typing import Callable
 import serial
 
 from app.models import SerialConfig
-from app.protocol import FRAME_END_BYTE, FRAME_LENGTH, FRAME_START_BYTE, ParsedFrame, parse_frame
+from app.protocol import (
+    FRAME_END_BYTE,
+    FRAME_MAX_LENGTH,
+    FRAME_MIN_LENGTH,
+    FRAME_START_BYTE,
+    ParsedFrame,
+    parse_frame,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -172,13 +179,24 @@ class SerialBridge:
                 if first[0] != FRAME_START_BYTE:
                     continue
 
-                rest = self._read_exact(ser, FRAME_LENGTH - 1, timeout_multiplier=float(FRAME_LENGTH))
-                if len(rest) != FRAME_LENGTH - 1:
+                # Alcune varianti BUS rispondono con 14 byte, altre con 15 byte (byte extra prima del terminatore).
+                rest = self._read_exact(ser, FRAME_MIN_LENGTH - 1, timeout_multiplier=float(FRAME_MIN_LENGTH))
+                if len(rest) != FRAME_MIN_LENGTH - 1:
                     continue
 
                 raw = first + rest
                 if raw[-1] != FRAME_END_BYTE:
-                    LOGGER.warning("Frame ricevuto con end marker errato: 0x%02X", raw[-1])
+                    extra = self._read_exact(ser, 1, timeout_multiplier=1.0)
+                    if len(extra) != 1:
+                        continue
+                    raw += extra
+
+                    if raw[-1] != FRAME_END_BYTE:
+                        LOGGER.warning("Frame ricevuto con end marker errato: 0x%02X", raw[-1])
+                        continue
+
+                if len(raw) < FRAME_MIN_LENGTH or len(raw) > FRAME_MAX_LENGTH:
+                    LOGGER.warning("Frame ricevuto con lunghezza inattesa: %d", len(raw))
                     continue
 
                 try:

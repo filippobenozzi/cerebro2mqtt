@@ -437,9 +437,11 @@ class BridgeService:
         board_slug = parts[0]
         command_path = "/".join(parts[1:])
 
+        if command_path != "set" and not command_path.endswith("/set"):
+            return
+
         board = self._boards_by_topic.get(board_slug)
         if board is None:
-            LOGGER.debug("MQTT topic ignorato (scheda sconosciuta): %s", topic)
             return
         if not board.enabled:
             LOGGER.info("MQTT topic ignorato (scheda disabilitata): %s", topic)
