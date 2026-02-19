@@ -55,6 +55,14 @@ class ConfigStore:
     def _validate(self, config: AppConfig) -> None:
         if config.serial.baudrate <= 0:
             raise ConfigError("Serial baudrate non valido")
+        if config.serial.bytesize not in {5, 6, 7, 8}:
+            raise ConfigError("Serial bytesize non valido (usa 5..8)")
+        if config.serial.parity not in {"N", "E", "O", "M", "S"}:
+            raise ConfigError("Serial parity non valida (usa N/E/O/M/S)")
+        if config.serial.stopbits not in {1, 2}:
+            raise ConfigError("Serial stopbits non valido (usa 1 o 2)")
+        if config.serial.timeout_sec <= 0:
+            raise ConfigError("Serial timeout non valido")
         if config.mqtt.port <= 0:
             raise ConfigError("Porta MQTT non valida")
         if config.polling.interval_sec < 1:

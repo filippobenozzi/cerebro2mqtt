@@ -108,5 +108,25 @@ class ConfigStoreTest(unittest.TestCase):
             cfg = store.update_from_dict(payload)
             self.assertFalse(cfg.boards[0].publish_enabled)
 
+    def test_invalid_serial_values_are_sanitized(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "config.json"
+            store = ConfigStore(path)
+            payload = store.config.to_dict()
+            payload["serial"] = {
+                "port": "/dev/ttyS0",
+                "baudrate": 9600,
+                "bytesize": 15,
+                "parity": "X",
+                "stopbits": 9,
+                "timeout_sec": 0,
+            }
+
+            cfg = store.update_from_dict(payload)
+            self.assertEqual(cfg.serial.bytesize, 8)
+            self.assertEqual(cfg.serial.parity, "N")
+            self.assertEqual(cfg.serial.stopbits, 1)
+            self.assertEqual(cfg.serial.timeout_sec, 0.25)
+
 if __name__ == "__main__":
     unittest.main()

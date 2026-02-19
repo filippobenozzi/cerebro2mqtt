@@ -481,8 +481,6 @@ class BridgeService:
                     self._publish_board_state_from_polling(board, polling)
 
         channel_state = "ON" if state else "OFF"
-        self._publish_light_channel_state(board, channel, state)
-
         if not ok:
             self._publish_action_result(
                 board,
@@ -492,6 +490,7 @@ class BridgeService:
             )
             return
 
+        self._publish_light_channel_state(board, channel, state)
         if publish_legacy_state:
             topic_prefix = self._topic_prefix(board)
             self._publish(f"{topic_prefix}/state", channel_state, retain=True)
@@ -538,8 +537,6 @@ class BridgeService:
                     self._publish_board_state_from_polling(board, polling)
 
         topic_prefix = self._topic_prefix(board)
-        self._publish(f"{topic_prefix}/state", state, retain=True)
-
         if not ok:
             self._publish_action_result(
                 board,
@@ -549,6 +546,7 @@ class BridgeService:
             )
             return
 
+        self._publish(f"{topic_prefix}/state", state, retain=True)
         self._publish_action_result(board, "shutter_set", True, state)
 
     def _handle_dimmer_command(self, board: BoardConfig, command_path: str, payload: str) -> None:
@@ -603,13 +601,12 @@ class BridgeService:
 
         topic_prefix = self._topic_prefix(board)
         brightness_255 = int(round((percent / 100.0) * 255))
-        self._publish(f"{topic_prefix}/state", "ON" if percent > 0 else "OFF", retain=True)
-        self._publish(f"{topic_prefix}/brightness/state", brightness_255, retain=True)
-
         if not ok:
             self._publish_action_result(board, "dimmer_set", False, f"timeout desired_percent={percent}")
             return
 
+        self._publish(f"{topic_prefix}/state", "ON" if percent > 0 else "OFF", retain=True)
+        self._publish(f"{topic_prefix}/brightness/state", brightness_255, retain=True)
         self._publish_action_result(board, "dimmer_set", True, f"percent={percent}")
 
     def _handle_thermostat_command(self, board: BoardConfig, command_path: str, payload: str) -> None:
@@ -640,12 +637,11 @@ class BridgeService:
                     ok = abs(polling.temperature_setpoint - setpoint) <= 0.6
                     if ok:
                         self._publish_board_state_from_polling(board, polling)
-            self._publish(f"{topic_prefix}/setpoint/state", round(setpoint, 1), retain=True)
-
             if not ok:
                 self._publish_action_result(board, "setpoint_set", False, f"timeout desired={round(setpoint, 1)}")
                 return
 
+            self._publish(f"{topic_prefix}/setpoint/state", round(setpoint, 1), retain=True)
             self._publish_action_result(board, "setpoint_set", True, f"setpoint={round(setpoint, 1)}")
             return
 
@@ -668,12 +664,11 @@ class BridgeService:
                     ok = polling.season == season
                     if ok:
                         self._publish_board_state_from_polling(board, polling)
-            self._publish(f"{topic_prefix}/season/state", "SUMMER" if season == 1 else "WINTER", retain=True)
-
             if not ok:
                 self._publish_action_result(board, "season_set", False, f"timeout desired={season}")
                 return
 
+            self._publish(f"{topic_prefix}/season/state", "SUMMER" if season == 1 else "WINTER", retain=True)
             self._publish_action_result(board, "season_set", True, f"season={season}")
 
     def _handle_serial_frame(self, frame: ParsedFrame) -> None:

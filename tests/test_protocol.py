@@ -87,30 +87,6 @@ class ProtocolTest(unittest.TestCase):
         polling = parse_polling_status(parsed)
         self.assertEqual(polling.outputs, 0b00000001)
 
-    def test_parse_frame_accepts_15_bytes(self):
-        raw = bytes([
-            0x49,
-            0x02,
-            CMD_POLLING_RESPONSE,
-            0x11,
-            0b00000001,
-            0x00,
-            0x04,
-            0x16,
-            0x00,
-            0x00,
-            0x02,
-            0x02,
-            0x01,
-            0x99,  # byte extra opzionale
-            0x46,
-        ])
-
-        parsed = parse_frame(raw)
-        self.assertEqual(parsed.address, 0x02)
-        self.assertEqual(parsed.command, CMD_POLLING_RESPONSE)
-        self.assertEqual(parsed.extra, bytes([0x99]))
-
 
 if __name__ == "__main__":
     unittest.main()

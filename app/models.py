@@ -111,13 +111,47 @@ class SerialConfig:
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "SerialConfig":
+        port = str(data.get("port", "/dev/ttyUSB0")).strip() or "/dev/ttyUSB0"
+
+        try:
+            baudrate = int(data.get("baudrate", 9600))
+        except (TypeError, ValueError):
+            baudrate = 9600
+        if baudrate <= 0:
+            baudrate = 9600
+
+        try:
+            bytesize = int(data.get("bytesize", 8))
+        except (TypeError, ValueError):
+            bytesize = 8
+        if bytesize not in {5, 6, 7, 8}:
+            bytesize = 8
+
+        parity = str(data.get("parity", "N")).strip().upper() or "N"
+        if parity not in {"N", "E", "O", "M", "S"}:
+            parity = "N"
+
+        try:
+            stopbits = int(float(data.get("stopbits", 1)))
+        except (TypeError, ValueError):
+            stopbits = 1
+        if stopbits not in {1, 2}:
+            stopbits = 1
+
+        try:
+            timeout_sec = float(data.get("timeout_sec", 0.25))
+        except (TypeError, ValueError):
+            timeout_sec = 0.25
+        if timeout_sec <= 0:
+            timeout_sec = 0.25
+
         return SerialConfig(
-            port=str(data.get("port", "/dev/ttyUSB0")).strip() or "/dev/ttyUSB0",
-            baudrate=int(data.get("baudrate", 9600)),
-            bytesize=int(data.get("bytesize", 8)),
-            parity=str(data.get("parity", "N")).strip().upper() or "N",
-            stopbits=int(data.get("stopbits", 1)),
-            timeout_sec=float(data.get("timeout_sec", 0.25)),
+            port=port,
+            baudrate=baudrate,
+            bytesize=bytesize,
+            parity=parity,
+            stopbits=stopbits,
+            timeout_sec=timeout_sec,
         )
 
 

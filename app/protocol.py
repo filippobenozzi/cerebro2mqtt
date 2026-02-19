@@ -6,8 +6,6 @@ from dataclasses import dataclass
 FRAME_START_BYTE = 0x49
 FRAME_END_BYTE = 0x46
 FRAME_LENGTH = 14
-FRAME_MIN_LENGTH = 14
-FRAME_MAX_LENGTH = 15
 DATA_LENGTH = 10
 
 CMD_POLLING_EXTENDED = 0x40
@@ -34,7 +32,6 @@ class ParsedFrame:
     command: int
     data: bytes
     raw: bytes
-    extra: bytes = b""
 
 
 @dataclass
@@ -72,17 +69,14 @@ def build_frame(address: int, command: int, data: list[int] | None = None) -> by
 
 
 def parse_frame(raw: bytes) -> ParsedFrame:
-    frame_len = len(raw)
-    if frame_len < FRAME_MIN_LENGTH or frame_len > FRAME_MAX_LENGTH:
+    if len(raw) != FRAME_LENGTH:
         raise ProtocolError("Lunghezza frame non valida")
     if raw[0] != FRAME_START_BYTE:
         raise ProtocolError("Start byte non valido")
     if raw[-1] != FRAME_END_BYTE:
         raise ProtocolError("End byte non valido")
 
-    data = raw[3:13]
-    extra = raw[13:-1] if frame_len > FRAME_LENGTH else b""
-    return ParsedFrame(address=raw[1], command=raw[2], data=data, raw=raw, extra=extra)
+    return ParsedFrame(address=raw[1], command=raw[2], data=raw[3:13], raw=raw)
 
 
 def build_polling_extended(address: int) -> bytes:

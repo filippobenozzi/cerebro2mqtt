@@ -238,3 +238,7 @@ sudo systemctl disable --now serial-getty@ttyS0.service
 ```bash
 sudo systemctl restart cerebro2mqtt.service
 ```
+
+4. Verifica parametri UART:
+   - `bytesize` deve essere 5, 6, 7 o 8 (tipicamente 8)
+   - non usare `bytesize=15`: `15` non e la lunghezza frame, e un parametro UART non valido

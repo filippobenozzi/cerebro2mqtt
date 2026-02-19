@@ -165,11 +165,35 @@
         <article class="card">
           <h2>Seriale</h2>
           <div class="field"><label for="serial_port">Porta</label><input id="serial_port" /></div>
-          <div class="field"><label for="serial_baudrate">Baudrate</label><input id="serial_baudrate" type="number" /></div>
-          <div class="field"><label for="serial_bytesize">Bytesize</label><input id="serial_bytesize" type="number" /></div>
-          <div class="field"><label for="serial_parity">Parity (N/E/O)</label><input id="serial_parity" /></div>
-          <div class="field"><label for="serial_stopbits">Stopbits</label><input id="serial_stopbits" type="number" /></div>
-          <div class="field"><label for="serial_timeout_sec">Timeout sec</label><input id="serial_timeout_sec" type="number" step="0.05" /></div>
+          <div class="field"><label for="serial_baudrate">Baudrate</label><input id="serial_baudrate" type="number" min="1" step="1" /></div>
+          <div class="field">
+            <label for="serial_bytesize">Data bits UART</label>
+            <select id="serial_bytesize">
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="serial_parity">Parity</label>
+            <select id="serial_parity">
+              <option value="N">N</option>
+              <option value="E">E</option>
+              <option value="O">O</option>
+              <option value="M">M</option>
+              <option value="S">S</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="serial_stopbits">Stopbits</label>
+            <select id="serial_stopbits">
+              <option value="1">1</option>
+              <option value="2">2</option>
+            </select>
+          </div>
+          <div class="field"><label for="serial_timeout_sec">Timeout sec</label><input id="serial_timeout_sec" type="number" min="0.05" step="0.05" /></div>
+          <p class="small">Nota: il frame BUS ha lunghezza fissa (14 byte). Qui configuri solo i parametri UART.</p>
         </article>
 
         <article class="card">
