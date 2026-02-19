@@ -122,11 +122,13 @@ sudo journalctl -u cerebro2mqtt.service -f
   "boards": [
     {
       "id": "uuid",
-      "name": "Luce Sala",
+      "name": "Luci Piano Terra",
       "type": "luci",
       "address": 2,
       "channel": 1,
-      "topic": "luce_sala",
+      "channel_start": 1,
+      "channel_end": 8,
+      "topic": "luci_piano_terra",
       "enabled": true
     }
   ]
@@ -147,8 +149,9 @@ Base topic default: `cerebro2mqtt`
   - `cerebro2mqtt/<slug>/poll/set`
 
 - Luci:
-  - cmd: `cerebro2mqtt/<slug>/set` (`ON`/`OFF`)
-  - state: `cerebro2mqtt/<slug>/state`
+  - cmd per canale: `cerebro2mqtt/<slug>/ch/<canale>/set` (`ON`/`OFF`)
+  - state per canale: `cerebro2mqtt/<slug>/ch/<canale>/state`
+  - esempio: `cerebro2mqtt/luci_piano_terra/ch/1/set`
 
 - Tapparelle:
   - cmd: `cerebro2mqtt/<slug>/set` (`OPEN`/`CLOSE`)
@@ -178,7 +181,7 @@ Entita create:
 
 - Pulsante `Cerebro Polling` (globale)
 - Pulsante polling per ogni scheda
-- `switch` per `luci`
+- `switch` per `luci` (uno per ogni canale nel range configurato)
 - `cover` per `tapparelle`
 - `light` per `dimmer`
 - `sensor` temperatura + `number` setpoint + `select` stagione per `termostato`

@@ -7,6 +7,7 @@ import subprocess
 import threading
 import time
 from collections import defaultdict
+import re
 from typing import Any
 
 from app.config_store import ConfigStore
@@ -240,18 +241,34 @@ class BridgeService:
             self._handle_thermostat_command(board, command_path, payload)
 
     def _handle_light_command(self, board: BoardConfig, command_path: str, payload: str) -> None:
-        if command_path != "set":
+        channel: int | None = None
+        publish_legacy_state = False
+
+        if command_path == "set":
+            channel = board.primary_channel
+            publish_legacy_state = True
+        else:
+            match = re.fullmatch(r"ch/(\d+)/set", command_path)
+            if not match:
+                return
+            channel = int(match.group(1))
+
+        if channel not in board.channels:
+            LOGGER.warning("Canale %s fuori range per scheda %s", channel, board.name)
             return
 
         state = _parse_on_off(payload)
         if state is None:
             return
 
-        frame = build_light_control(board.address, board.channel, state)
+        frame = build_light_control(board.address, channel, state)
         self._send_frame(frame)
 
         topic_prefix = self._topic_prefix(board)
-        self._publish(f"{topic_prefix}/state", "ON" if state else "OFF", retain=True)
+        channel_state = "ON" if state else "OFF"
+        self._publish(f"{topic_prefix}/ch/{channel}/state", channel_state, retain=True)
+        if publish_legacy_state or len(board.channels) == 1:
+            self._publish(f"{topic_prefix}/state", channel_state, retain=True)
 
     def _handle_shutter_command(self, board: BoardConfig, command_path: str, payload: str) -> None:
         if command_path != "set":
@@ -270,7 +287,7 @@ class BridgeService:
         else:
             return
 
-        frame = build_shutter_control(board.address, board.channel, up)
+        frame = build_shutter_control(board.address, board.primary_channel, up)
         self._send_frame(frame)
 
         topic_prefix = self._topic_prefix(board)
@@ -359,13 +376,18 @@ class BridgeService:
         self._publish(f"{topic_prefix}/polling/raw", raw_payload, retain=False)
 
         if board.board_type == BoardType.LIGHTS:
-            bit = 1 << (board.channel - 1)
-            state = "ON" if (polling.outputs & bit) else "OFF"
-            self._publish(f"{topic_prefix}/state", state, retain=True)
+            channels = board.channels
+            for channel in channels:
+                bit = 1 << (channel - 1)
+                state = "ON" if (polling.outputs & bit) else "OFF"
+                self._publish(f"{topic_prefix}/ch/{channel}/state", state, retain=True)
+
+            if len(channels) == 1:
+                self._publish(f"{topic_prefix}/state", state, retain=True)
             return
 
         if board.board_type == BoardType.SHUTTERS:
-            bit = 1 << (board.channel - 1)
+            bit = 1 << (board.primary_channel - 1)
             state = "open" if (polling.outputs & bit) else "closed"
             self._publish(f"{topic_prefix}/state", state, retain=True)
             return
@@ -433,17 +455,18 @@ class BridgeService:
         self._publish(poll_button_topic, poll_button_payload, retain=True)
 
         if board.board_type == BoardType.LIGHTS:
-            config_topic = f"{discovery_prefix}/switch/cerebro2mqtt_{board.board_id}/config"
-            payload = {
-                "name": board.name,
-                "unique_id": f"cerebro2mqtt_{board.board_id}",
-                "command_topic": f"{topic_prefix}/set",
-                "state_topic": f"{topic_prefix}/state",
-                "payload_on": "ON",
-                "payload_off": "OFF",
-                "device": device,
-            }
-            self._publish(config_topic, payload, retain=True)
+            for channel in board.channels:
+                config_topic = f"{discovery_prefix}/switch/cerebro2mqtt_{board.board_id}_ch{channel}/config"
+                payload = {
+                    "name": f"{board.name} CH{channel}",
+                    "unique_id": f"cerebro2mqtt_{board.board_id}_ch{channel}",
+                    "command_topic": f"{topic_prefix}/ch/{channel}/set",
+                    "state_topic": f"{topic_prefix}/ch/{channel}/state",
+                    "payload_on": "ON",
+                    "payload_off": "OFF",
+                    "device": device,
+                }
+                self._publish(config_topic, payload, retain=True)
             return
 
         if board.board_type == BoardType.SHUTTERS:

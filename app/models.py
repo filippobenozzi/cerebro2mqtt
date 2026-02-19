@@ -24,7 +24,8 @@ class BoardConfig:
     name: str
     board_type: BoardType
     address: int
-    channel: int = 1
+    channel_start: int = 1
+    channel_end: int = 1
     topic: str = ""
     enabled: bool = True
     board_id: str = field(default_factory=lambda: str(uuid4()))
@@ -37,13 +38,25 @@ class BoardConfig:
     def topic_slug(self) -> str:
         return slugify(self.topic or self.name)
 
+    @property
+    def primary_channel(self) -> int:
+        return self.channel_start
+
+    @property
+    def channels(self) -> list[int]:
+        if self.board_type == BoardType.LIGHTS:
+            return list(range(self.channel_start, self.channel_end + 1))
+        return [self.channel_start]
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.board_id,
             "name": self.name,
             "type": self.board_type.value,
             "address": self.address,
-            "channel": self.channel,
+            "channel": self.primary_channel,
+            "channel_start": self.channel_start,
+            "channel_end": self.channel_end,
             "topic": self.topic,
             "enabled": self.enabled,
         }
@@ -56,12 +69,19 @@ class BoardConfig:
         except ValueError:
             board_type = BoardType.LIGHTS
 
+        legacy_channel = int(data.get("channel", 1))
+        channel_start = int(data.get("channel_start", legacy_channel))
+        channel_end = int(data.get("channel_end", channel_start))
+        if board_type != BoardType.LIGHTS:
+            channel_end = channel_start
+
         return BoardConfig(
             board_id=str(data.get("id") or uuid4()),
             name=str(data.get("name", "Scheda")).strip(),
             board_type=board_type,
             address=int(data.get("address", 1)),
-            channel=int(data.get("channel", 1)),
+            channel_start=channel_start,
+            channel_end=channel_end,
             topic=str(data.get("topic", "")).strip(),
             enabled=bool(data.get("enabled", True)),
         )

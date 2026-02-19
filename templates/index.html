@@ -221,7 +221,8 @@
                 <th>Nome</th>
                 <th>Tipo</th>
                 <th>Indirizzo</th>
-                <th>Canale</th>
+                <th>Canale da</th>
+                <th>Canale a</th>
                 <th>Topic (opzionale)</th>
                 <th>Abilitata</th>
                 <th></th>
@@ -283,6 +284,33 @@
         return `board_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
       }
 
+      function applyTypeRules(tr) {
+        const cells = tr.querySelectorAll("td");
+        const type = cells[1].querySelector("select").value;
+        const startInput = cells[3].querySelector("input");
+        const endInput = cells[4].querySelector("input");
+
+        if (type === "luci") {
+          startInput.min = "1";
+          startInput.max = "8";
+          endInput.min = "1";
+          endInput.max = "8";
+          endInput.disabled = false;
+          return;
+        }
+
+        if (type === "tapparelle") {
+          startInput.min = "1";
+          startInput.max = "8";
+        } else {
+          startInput.min = "1";
+          startInput.removeAttribute("max");
+        }
+
+        endInput.value = startInput.value || "1";
+        endInput.disabled = true;
+      }
+
       function addBoardRow(board = {}) {
         const tr = document.createElement("tr");
         tr.dataset.id = board.id || makeBoardId();
@@ -303,13 +331,24 @@
         addressInput.value = board.address ?? 1;
         tdAddress.appendChild(addressInput);
 
-        const tdChannel = document.createElement("td");
-        const channelInput = document.createElement("input");
-        channelInput.type = "number";
-        channelInput.min = "1";
-        channelInput.max = "8";
-        channelInput.value = board.channel ?? 1;
-        tdChannel.appendChild(channelInput);
+        const channelStartValue = board.channel_start ?? board.channel ?? 1;
+        const channelEndValue = board.channel_end ?? board.channel ?? channelStartValue;
+
+        const tdChannelStart = document.createElement("td");
+        const channelStartInput = document.createElement("input");
+        channelStartInput.type = "number";
+        channelStartInput.min = "1";
+        channelStartInput.max = "8";
+        channelStartInput.value = channelStartValue;
+        tdChannelStart.appendChild(channelStartInput);
+
+        const tdChannelEnd = document.createElement("td");
+        const channelEndInput = document.createElement("input");
+        channelEndInput.type = "number";
+        channelEndInput.min = "1";
+        channelEndInput.max = "8";
+        channelEndInput.value = channelEndValue;
+        tdChannelEnd.appendChild(channelEndInput);
 
         const tdTopic = document.createElement("td");
         const topicInput = document.createElement("input");
@@ -333,12 +372,18 @@
         tr.appendChild(tdName);
         tr.appendChild(tdType);
         tr.appendChild(tdAddress);
-        tr.appendChild(tdChannel);
+        tr.appendChild(tdChannelStart);
+        tr.appendChild(tdChannelEnd);
         tr.appendChild(tdTopic);
         tr.appendChild(tdEnabled);
         tr.appendChild(tdDelete);
 
         boardRows.appendChild(tr);
+
+        const typeSelect = tdType.querySelector("select");
+        typeSelect.onchange = () => applyTypeRules(tr);
+        channelStartInput.onchange = () => applyTypeRules(tr);
+        applyTypeRules(tr);
       }
 
       function setValue(id, value) {
@@ -354,14 +399,21 @@
         const rows = Array.from(boardRows.querySelectorAll("tr"));
         return rows.map((tr) => {
           const cells = tr.querySelectorAll("td");
+          const type = cells[1].querySelector("select").value;
+          const channelStart = Number(cells[3].querySelector("input").value || 1);
+          const rawChannelEnd = Number(cells[4].querySelector("input").value || channelStart);
+          const channelEnd = type === "luci" ? rawChannelEnd : channelStart;
+
           return {
             id: tr.dataset.id,
             name: cells[0].querySelector("input").value.trim(),
-            type: cells[1].querySelector("select").value,
+            type,
             address: Number(cells[2].querySelector("input").value || 1),
-            channel: Number(cells[3].querySelector("input").value || 1),
-            topic: cells[4].querySelector("input").value.trim(),
-            enabled: cells[5].querySelector("input").checked,
+            channel: channelStart,
+            channel_start: channelStart,
+            channel_end: channelEnd,
+            topic: cells[5].querySelector("input").value.trim(),
+            enabled: cells[6].querySelector("input").checked,
           };
         });
       }

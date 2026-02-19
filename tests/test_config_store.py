@@ -43,6 +43,49 @@ class ConfigStoreTest(unittest.TestCase):
             with self.assertRaises(ConfigError):
                 store.update_from_dict(payload)
 
+    def test_accept_lights_channel_range(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "config.json"
+            store = ConfigStore(path)
+            payload = store.config.to_dict()
+            payload["boards"] = [
+                {
+                    "id": "1",
+                    "name": "Luci Zona Giorno",
+                    "type": "luci",
+                    "address": 2,
+                    "channel_start": 1,
+                    "channel_end": 8,
+                    "topic": "zona_giorno",
+                    "enabled": True,
+                }
+            ]
+
+            cfg = store.update_from_dict(payload)
+            self.assertEqual(cfg.boards[0].channel_start, 1)
+            self.assertEqual(cfg.boards[0].channel_end, 8)
+
+    def test_reject_invalid_lights_channel_range(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "config.json"
+            store = ConfigStore(path)
+            payload = store.config.to_dict()
+            payload["boards"] = [
+                {
+                    "id": "1",
+                    "name": "Luci Range Errato",
+                    "type": "luci",
+                    "address": 2,
+                    "channel_start": 8,
+                    "channel_end": 1,
+                    "topic": "luci_errato",
+                    "enabled": True,
+                }
+            ]
+
+            with self.assertRaises(ConfigError):
+                store.update_from_dict(payload)
+
 
 if __name__ == "__main__":
     unittest.main()

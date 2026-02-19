@@ -70,12 +70,19 @@ class ConfigStore:
             if board.address < 1 or board.address > 254:
                 raise ConfigError(f"Indirizzo non valido per {board.name}: {board.address}")
 
-            if board.board_type in (BoardType.LIGHTS, BoardType.SHUTTERS):
-                if board.channel < 1 or board.channel > 8:
-                    raise ConfigError(f"Canale non valido per {board.name}: {board.channel}")
+            if board.board_type == BoardType.LIGHTS:
+                if board.channel_start < 1 or board.channel_start > 8:
+                    raise ConfigError(f"Canale di partenza non valido per {board.name}: {board.channel_start}")
+                if board.channel_end < 1 or board.channel_end > 8:
+                    raise ConfigError(f"Canale finale non valido per {board.name}: {board.channel_end}")
+                if board.channel_start > board.channel_end:
+                    raise ConfigError(f"Range canali non valido per {board.name}: {board.channel_start}-{board.channel_end}")
+            elif board.board_type == BoardType.SHUTTERS:
+                if board.channel_start < 1 or board.channel_start > 8:
+                    raise ConfigError(f"Canale non valido per {board.name}: {board.channel_start}")
             else:
-                if board.channel < 1:
-                    raise ConfigError(f"Canale non valido per {board.name}: {board.channel}")
+                if board.channel_start < 1:
+                    raise ConfigError(f"Canale non valido per {board.name}: {board.channel_start}")
 
             topic = board.topic_slug
             if topic in seen_topics:
