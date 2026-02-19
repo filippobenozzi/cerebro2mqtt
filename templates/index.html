@@ -269,6 +269,12 @@
 
     <script>
       const TYPES = ["luci", "tapparelle", "termostato", "dimmer"];
+      const TYPE_LABELS = {
+        luci: "lights",
+        tapparelle: "shutters",
+        termostato: "thermostat",
+        dimmer: "dimmer",
+      };
 
       const boardRows = document.getElementById("board_rows");
       const statusEl = document.getElementById("status");
@@ -285,7 +291,7 @@
         for (const type of TYPES) {
           const opt = document.createElement("option");
           opt.value = type;
-          opt.textContent = type;
+          opt.textContent = TYPE_LABELS[type] || type;
           if (type === value) opt.selected = true;
           select.appendChild(opt);
         }

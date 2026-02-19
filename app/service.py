@@ -860,7 +860,7 @@ class BridgeService:
             "device": {
                 "identifiers": ["cerebro2mqtt_bridge"],
                 "name": "Cerebro2MQTT Bridge",
-                "manufacturer": "Custom",
+                "manufacturer": "AlgoDomo",
                 "model": "BUS-MQTT",
             },
         }
@@ -881,7 +881,7 @@ class BridgeService:
             "identifiers": [f"cerebro2mqtt_{board.board_id}"],
             "name": board.name,
             "manufacturer": "AlgoDomo",
-            "model": board.board_type.value,
+            "model": _board_type_model_label(board.board_type),
         }
 
         poll_button_topic = f"{discovery_prefix}/button/cerebro2mqtt_{board.board_id}_poll/config"
@@ -1138,3 +1138,13 @@ def _season_to_label(season: int) -> str:
 
 def _season_to_hvac_mode(season: int) -> str:
     return "cool" if season == 1 else "heat"
+
+
+def _board_type_model_label(board_type: BoardType) -> str:
+    if board_type == BoardType.LIGHTS:
+        return "lights"
+    if board_type == BoardType.SHUTTERS:
+        return "shutters"
+    if board_type == BoardType.THERMOSTAT:
+        return "thermostat"
+    return board_type.value
