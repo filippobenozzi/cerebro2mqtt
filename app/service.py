@@ -361,6 +361,10 @@ class BridgeService:
         if not board.publish_enabled:
             return
 
+        if success:
+            self._address_poll_failures[board.address] = 0
+            self._set_board_availability(board, True)
+
         topic_prefix = self._topic_prefix(board)
         payload = {
             "action": action,
@@ -487,7 +491,7 @@ class BridgeService:
 
     def _handle_mqtt_connected(self) -> None:
         self._publish_discovery()
-        self._publish_all_availability(force=True)
+        self._publish_all_availability(force=False)
         self.trigger_poll_all()
 
     def _handle_mqtt_command(self, topic: str, payload: str) -> None:
