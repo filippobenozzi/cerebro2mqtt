@@ -23,12 +23,13 @@ from app.protocol import (
     build_set_season,
     build_shutter_control,
     bus_dimmer_to_percent,
+    percent_to_bus_dimmer,
     parse_polling_status,
 )
 from app.serial_bridge import SerialBridge
 
 LOGGER = logging.getLogger(__name__)
-COMMAND_ACK_TIMEOUT_SEC = 1.2
+COMMAND_ACK_TIMEOUT_SEC = 2.0
 
 
 @dataclass
@@ -155,12 +156,6 @@ class BridgeService:
 
         for board in self._config.boards:
             if not board.enabled:
-                continue
-            if board.address == 1:
-                LOGGER.warning(
-                    "Scheda '%s' con indirizzo 1 ignorata: 1 e broadcast nel protocollo (usa 2..254)",
-                    board.name,
-                )
                 continue
             self._boards_by_topic[board.topic_slug] = board
             self._boards_by_address[board.address].append(board)
@@ -297,6 +292,25 @@ class BridgeService:
         }
         self._publish(f"{topic_prefix}/poll/last", payload, retain=True)
 
+    def _request_polling_status(self, address: int, timeout: float) -> tuple[bool, Any | None]:
+        frame = build_polling_extended(address)
+        ok, rx = self._send_with_ack(
+            frame=frame,
+            address=address,
+            matcher=lambda f: f.command in (CMD_POLLING_EXTENDED, CMD_POLLING_RESPONSE),
+            timeout=timeout,
+        )
+        if not ok or rx is None:
+            return False, None
+
+        try:
+            polling = parse_polling_status(rx)
+        except Exception:
+            LOGGER.exception("Errore parsing polling durante conferma comando")
+            return False, None
+
+        return True, polling
+
     def _handle_mqtt_connected(self) -> None:
         self._publish_discovery()
         self.trigger_poll_all()
@@ -376,6 +390,15 @@ class BridgeService:
         )
 
         if not ok:
+            poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
+            if poll_ok and polling is not None:
+                bit = 1 << (channel - 1)
+                is_on = (polling.outputs & bit) != 0
+                ok = is_on == state
+                if ok:
+                    self._publish_board_state_from_polling(board, polling)
+
+        if not ok:
             self._publish_action_result(board, "light_set", False, f"timeout channel={channel}")
             return
 
@@ -417,6 +440,14 @@ class BridgeService:
             ),
             timeout=COMMAND_ACK_TIMEOUT_SEC,
         )
+        if not ok:
+            poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
+            if poll_ok and polling is not None:
+                bit = 1 << (board.primary_channel - 1)
+                is_open = (polling.outputs & bit) != 0
+                ok = is_open == up
+                if ok:
+                    self._publish_board_state_from_polling(board, polling)
         if not ok:
             self._publish_action_result(board, "shutter_set", False, f"timeout channel={board.primary_channel}")
             return
@@ -462,6 +493,16 @@ class BridgeService:
             timeout=COMMAND_ACK_TIMEOUT_SEC,
         )
         if not ok:
+            poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
+            if poll_ok and polling is not None:
+                expected_bus = percent_to_bus_dimmer(percent)
+                # Alcune schede riportano 9 come 10 nel polling esteso.
+                observed_bus = 10 if polling.dimmer_0_10 >= 9 else polling.dimmer_0_10
+                wanted_bus = 10 if expected_bus >= 9 else expected_bus
+                ok = observed_bus == wanted_bus
+                if ok:
+                    self._publish_board_state_from_polling(board, polling)
+        if not ok:
             self._publish_action_result(board, "dimmer_set", False, "timeout")
             return
 
@@ -496,6 +537,13 @@ class BridgeService:
                 timeout=COMMAND_ACK_TIMEOUT_SEC,
             )
             if not ok:
+                poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
+                if poll_ok and polling is not None:
+                    # Il polling potrebbe arrotondare il decimale del setpoint.
+                    ok = abs(polling.temperature_setpoint - setpoint) <= 0.6
+                    if ok:
+                        self._publish_board_state_from_polling(board, polling)
+            if not ok:
                 self._publish_action_result(board, "setpoint_set", False, "timeout")
                 return
             self._publish(f"{topic_prefix}/setpoint/state", round(setpoint, 1), retain=True)
@@ -515,6 +563,12 @@ class BridgeService:
                 matcher=lambda rx: rx.command == expected_command and rx.data[0] == expected_data0,
                 timeout=COMMAND_ACK_TIMEOUT_SEC,
             )
+            if not ok:
+                poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
+                if poll_ok and polling is not None:
+                    ok = polling.season == season
+                    if ok:
+                        self._publish_board_state_from_polling(board, polling)
             if not ok:
                 self._publish_action_result(board, "season_set", False, "timeout")
                 return

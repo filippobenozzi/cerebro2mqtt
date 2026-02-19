@@ -25,13 +25,13 @@ class ConfigStore:
 
     def update_from_dict(self, data: dict) -> AppConfig:
         config = AppConfig.from_dict(data)
-        self._validate(config, strict=True)
+        self._validate(config)
         self.save(config)
         return config
 
     def save(self, config: AppConfig) -> None:
         with self._lock:
-            self._validate(config, strict=True)
+            self._validate(config)
             self.path.parent.mkdir(parents=True, exist_ok=True)
             tmp_path = self.path.with_suffix(".tmp")
             with tmp_path.open("w", encoding="utf-8") as handle:
@@ -49,11 +49,10 @@ class ConfigStore:
             raw = json.load(handle)
 
         config = AppConfig.from_dict(raw)
-        # Non blocca l'avvio su config legacy; la validazione stretta avviene al salvataggio.
-        self._validate(config, strict=False)
+        self._validate(config)
         return config
 
-    def _validate(self, config: AppConfig, strict: bool) -> None:
+    def _validate(self, config: AppConfig) -> None:
         if config.serial.baudrate <= 0:
             raise ConfigError("Serial baudrate non valido")
         if config.mqtt.port <= 0:
@@ -70,10 +69,6 @@ class ConfigStore:
                 raise ConfigError("Ogni scheda deve avere un nome")
             if board.address < 1 or board.address > 254:
                 raise ConfigError(f"Indirizzo non valido per {board.name}: {board.address}")
-            if strict and board.address == 1:
-                raise ConfigError(
-                    f"Indirizzo non valido per {board.name}: 1 e riservato al broadcast, usa 2..254"
-                )
 
             if board.board_type == BoardType.LIGHTS:
                 if board.channel_start < 1 or board.channel_start > 8:

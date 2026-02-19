@@ -25,7 +25,6 @@ Bridge BUS/seriale proprietario -> MQTT con discovery automatico Home Assistant,
 - Python 3.11+
 - Broker MQTT raggiungibile
 - Interfaccia seriale BUS (es. `/dev/ttyUSB0`)
-- Indirizzi schede validi: `2..254` (`1` e riservato al broadcast protocollo)
 
 ## Avvio locale
 

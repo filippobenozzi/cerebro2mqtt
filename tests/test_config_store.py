@@ -108,27 +108,5 @@ class ConfigStoreTest(unittest.TestCase):
             cfg = store.update_from_dict(payload)
             self.assertFalse(cfg.boards[0].publish_enabled)
 
-    def test_reject_address_1_on_save(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "config.json"
-            store = ConfigStore(path)
-            payload = store.config.to_dict()
-            payload["boards"] = [
-                {
-                    "id": "1",
-                    "name": "Scheda Broadcast",
-                    "type": "luci",
-                    "address": 1,
-                    "channel_start": 1,
-                    "channel_end": 1,
-                    "topic": "broadcast",
-                    "enabled": True,
-                }
-            ]
-
-            with self.assertRaises(ConfigError):
-                store.update_from_dict(payload)
-
-
 if __name__ == "__main__":
     unittest.main()
