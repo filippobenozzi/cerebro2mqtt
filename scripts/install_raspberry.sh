@@ -7,6 +7,7 @@ SERVICE_NAME="${SERVICE_NAME:-${APP_NAME}.service}"
 APP_USER="${APP_USER:-root}"
 APP_GROUP="${APP_GROUP:-${APP_USER}}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
+SERIAL_PORT="${SERIAL_PORT:-/dev/ttyS0}"
 CONFIG_REL_PATH="config/config.json"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}"
 
@@ -39,10 +40,24 @@ install_system_packages() {
   apt-get update
   apt-get install -y --no-install-recommends \
     ca-certificates \
+    psmisc \
     python3 \
     python3-venv \
     python3-pip \
     rsync
+}
+
+configure_serial_port_guard() {
+  local port_name
+  port_name="$(basename "${SERIAL_PORT}")"
+
+  log "Disabilito getty seriale su ${port_name} (persistente)"
+  systemctl disable --now "serial-getty@${port_name}.service" 2>/dev/null || true
+  systemctl mask "serial-getty@${port_name}.service" 2>/dev/null || true
+
+  # Alias usato spesso su Raspberry
+  systemctl disable --now serial-getty@serial0.service 2>/dev/null || true
+  systemctl mask serial-getty@serial0.service 2>/dev/null || true
 }
 
 ensure_user_group() {
@@ -109,6 +124,9 @@ install_python_dependencies() {
 }
 
 install_systemd_service() {
+  local port_name
+  port_name="$(basename "${SERIAL_PORT}")"
+
   log "Creo unit systemd ${SERVICE_NAME}"
 
   cat > "${SERVICE_FILE}" <<UNIT
@@ -125,6 +143,9 @@ WorkingDirectory=${INSTALL_DIR}
 Environment=CEREBRO_CONFIG=${INSTALL_DIR}/${CONFIG_REL_PATH}
 Environment=LOG_LEVEL=INFO
 ExecStart=${INSTALL_DIR}/.venv/bin/python -m app.main
+ExecStartPre=/bin/sh -c 'systemctl stop serial-getty@${port_name}.service 2>/dev/null || true'
+ExecStartPre=/bin/sh -c 'systemctl stop serial-getty@serial0.service 2>/dev/null || true'
+ExecStartPre=/bin/sh -c 'fuser -k ${SERIAL_PORT} >/dev/null 2>&1 || true'
 Restart=always
 RestartSec=2
 
@@ -150,6 +171,7 @@ main() {
   require_root
   check_source_tree
   install_system_packages
+  configure_serial_port_guard
   ensure_user_group
   sync_application
   install_python_dependencies

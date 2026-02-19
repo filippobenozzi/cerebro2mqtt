@@ -58,6 +58,7 @@ sudo bash scripts/install_raspberry.sh
 Lo script:
 
 - installa dipendenze di sistema (`python3`, `python3-venv`, `python3-pip`, `rsync`)
+- disabilita/maska in modo persistente `serial-getty` sulla porta seriale configurata
 - copia il progetto in `/opt/cerebro2mqtt`
 - crea virtualenv e installa `requirements.txt`
 - crea/aggiorna il servizio `systemd`
@@ -68,6 +69,12 @@ Variabili opzionali:
 
 ```bash
 sudo INSTALL_DIR=/opt/cerebro2mqtt SERVICE_NAME=cerebro2mqtt.service APP_USER=root bash scripts/install_raspberry.sh
+```
+
+Per usare una porta diversa:
+
+```bash
+sudo SERIAL_PORT=/dev/ttyUSB0 bash scripts/install_raspberry.sh
 ```
 
 ### Installazione manuale
@@ -242,3 +249,10 @@ sudo systemctl restart cerebro2mqtt.service
 4. Verifica parametri UART:
    - `bytesize` deve essere 5, 6, 7 o 8 (tipicamente 8)
    - non usare `bytesize=15`: `15` non e la lunghezza frame, e un parametro UART non valido
+
+5. Rendere persistente il blocco di `serial-getty`:
+
+```bash
+sudo systemctl mask serial-getty@ttyS0.service
+sudo systemctl mask serial-getty@serial0.service
+```
