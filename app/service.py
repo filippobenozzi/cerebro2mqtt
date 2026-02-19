@@ -350,12 +350,16 @@ class BridgeService:
         for board in boards:
             self._set_board_availability(board, online, force=force)
 
-    def _publish_all_availability(self, force: bool = False) -> None:
+    def _publish_all_availability(self, force: bool = False, default_online: bool = False) -> None:
         with self._lock:
             boards = [board for board in self._config.boards if board.enabled and board.publish_enabled]
 
         for board in boards:
-            self._set_board_availability(board, self._board_online.get(board.board_id, False), force=force)
+            if default_online:
+                online = True
+            else:
+                online = self._board_online.get(board.board_id, False)
+            self._set_board_availability(board, online, force=force)
 
     def _publish_action_result(self, board: BoardConfig, action: str, success: bool, detail: str) -> None:
         if not board.publish_enabled:
@@ -491,7 +495,9 @@ class BridgeService:
 
     def _handle_mqtt_connected(self) -> None:
         self._publish_discovery()
-        self._publish_all_availability(force=False)
+        # Evita "offline" retained bloccanti in HA dopo restart/reconnect:
+        # partiamo online, poi il polling riporta offline se non arriva risposta.
+        self._publish_all_availability(force=True, default_online=True)
         self.trigger_poll_all()
 
     def _handle_mqtt_command(self, topic: str, payload: str) -> None:
