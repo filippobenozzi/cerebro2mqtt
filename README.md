@@ -151,6 +151,8 @@ Base topic default: `cerebro2mqtt`
 ### Globali
 
 - `cerebro2mqtt/poll_all/set` -> avvia polling di tutti gli indirizzi configurati
+- `cerebro2mqtt/service/restart/set` -> esegue `service.restart_command`
+- `cerebro2mqtt/service/restart/result` -> esito riavvio servizio (JSON con `success`, `detail`)
 
 ### Per scheda (slug = `topic` oppure `name` normalizzato)
 
@@ -199,6 +201,7 @@ Ogni entita usa `availability_topic`: al reconnect parte `online` (per evitare s
 Entita create:
 
 - Pulsante `Cerebro Polling` (globale)
+- Pulsante `Cerebro Restart Service` (globale)
 - Pulsante polling per ogni scheda
 - `light` per `luci` (uno per ogni canale nel range configurato)
 - `cover` per `tapparelle` (uno per canale se configuri un range)

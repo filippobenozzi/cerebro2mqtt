@@ -508,6 +508,24 @@ class BridgeService:
             self.trigger_poll_all()
             return
 
+        if topic == f"{base}/service/restart/set":
+            LOGGER.info("MQTT comando ricevuto: %s payload=%s", topic, payload)
+            try:
+                message = self.run_restart_command()
+                self._publish(
+                    f"{base}/service/restart/result",
+                    {"success": True, "detail": message, "ts": int(time.time())},
+                    retain=False,
+                )
+            except Exception as exc:
+                LOGGER.warning("Riavvio servizio fallito: %s", exc)
+                self._publish(
+                    f"{base}/service/restart/result",
+                    {"success": False, "detail": str(exc), "ts": int(time.time())},
+                    retain=False,
+                )
+            return
+
         if not topic.startswith(f"{base}/"):
             return
 
@@ -938,6 +956,22 @@ class BridgeService:
             },
         }
         self._publish(poll_button_topic, poll_button_payload, retain=True)
+
+        restart_button_topic = f"{discovery_prefix}/button/cerebro2mqtt_restart_service/config"
+        restart_button_payload = {
+            "name": "Cerebro Restart Service",
+            "unique_id": "cerebro2mqtt_restart_service",
+            "command_topic": f"{base}/service/restart/set",
+            "payload_press": "PRESS",
+            "icon": "mdi:restart",
+            "device": {
+                "identifiers": ["cerebro2mqtt_bridge"],
+                "name": "Cerebro2MQTT Bridge",
+                "manufacturer": "AlgoDomo",
+                "model": "BUS-MQTT",
+            },
+        }
+        self._publish(restart_button_topic, restart_button_payload, retain=True)
 
         for board in self._config.boards:
             if not board.enabled or not board.publish_enabled:
