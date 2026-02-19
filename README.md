@@ -216,3 +216,25 @@ Per il polling vengono accettate risposte sia `0x40` che `0x50`.
 ```bash
 python -m unittest discover -s tests
 ```
+
+## Troubleshooting seriale Raspberry
+
+Se vedi errori come `device reports readiness to read but returned no data`:
+
+1. Verifica che solo un processo usi la porta:
+
+```bash
+sudo lsof /dev/ttyS0
+```
+
+2. Disabilita login console seriale su Raspberry (spesso occupa `ttyS0`):
+
+```bash
+sudo systemctl disable --now serial-getty@ttyS0.service
+```
+
+3. Riavvia il servizio bridge:
+
+```bash
+sudo systemctl restart cerebro2mqtt.service
+```
