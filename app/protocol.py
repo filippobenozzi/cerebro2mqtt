@@ -9,6 +9,7 @@ FRAME_LENGTH = 14
 DATA_LENGTH = 10
 
 CMD_POLLING_EXTENDED = 0x40
+CMD_POLLING_RESPONSE = 0x50
 CMD_SET_POINT_TEMPERATURE = 0x5A
 CMD_SET_SEASON = 0x6B
 CMD_LIGHT_CONTROL_START_FIRST_FOUR = 0x51
@@ -133,7 +134,7 @@ def build_dimmer_control(address: int, percent: int) -> bytes:
 
 
 def parse_polling_status(frame: ParsedFrame) -> PollingStatus:
-    if frame.command != CMD_POLLING_EXTENDED:
+    if frame.command not in (CMD_POLLING_EXTENDED, CMD_POLLING_RESPONSE):
         raise ProtocolError(f"Comando inatteso in polling response: 0x{frame.command:02X}")
 
     raw_dimmer = frame.data[3]

@@ -27,6 +27,7 @@ class BoardConfig:
     channel_start: int = 1
     channel_end: int = 1
     topic: str = ""
+    publish_enabled: bool = True
     enabled: bool = True
     board_id: str = field(default_factory=lambda: str(uuid4()))
 
@@ -58,6 +59,7 @@ class BoardConfig:
             "channel_start": self.channel_start,
             "channel_end": self.channel_end,
             "topic": self.topic,
+            "publish_enabled": self.publish_enabled,
             "enabled": self.enabled,
         }
 
@@ -83,6 +85,7 @@ class BoardConfig:
             channel_start=channel_start,
             channel_end=channel_end,
             topic=str(data.get("topic", "")).strip(),
+            publish_enabled=bool(data.get("publish_enabled", True)),
             enabled=bool(data.get("enabled", True)),
         )
 

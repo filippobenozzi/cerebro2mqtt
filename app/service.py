@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-import json
 import logging
 import os
 import subprocess
@@ -8,13 +6,15 @@ import threading
 import time
 from collections import defaultdict
 import re
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Callable
 
 from app.config_store import ConfigStore
 from app.models import AppConfig, BoardConfig, BoardType
 from app.mqtt_bridge import MqttBridge
 from app.protocol import (
     CMD_POLLING_EXTENDED,
+    CMD_POLLING_RESPONSE,
     ParsedFrame,
     build_dimmer_control,
     build_light_control,
@@ -28,6 +28,15 @@ from app.protocol import (
 from app.serial_bridge import SerialBridge
 
 LOGGER = logging.getLogger(__name__)
+COMMAND_ACK_TIMEOUT_SEC = 1.2
+
+
+@dataclass
+class _AckWaiter:
+    address: int
+    matcher: Callable[[ParsedFrame], bool]
+    event: threading.Event = field(default_factory=threading.Event)
+    frame: ParsedFrame | None = None
 
 
 class BridgeService:
@@ -47,6 +56,8 @@ class BridgeService:
         self._boards_by_topic: dict[str, BoardConfig] = {}
         self._boards_by_address: dict[int, list[BoardConfig]] = defaultdict(list)
         self._dimmer_cache: dict[str, int] = {}
+        self._ack_lock = threading.Lock()
+        self._ack_waiters: list[_AckWaiter] = []
 
         self._rebuild_indexes()
 
@@ -178,13 +189,74 @@ class BridgeService:
 
     def _send_poll(self, address: int) -> None:
         frame = build_polling_extended(address)
-        self._send_frame(frame)
+        ok, _ = self._send_with_ack(
+            frame=frame,
+            address=address,
+            matcher=lambda rx: rx.command in (CMD_POLLING_EXTENDED, CMD_POLLING_RESPONSE),
+            timeout=COMMAND_ACK_TIMEOUT_SEC,
+        )
+
+        boards = self._boards_by_address.get(address, [])
+        for board in boards:
+            self._publish_poll_result(board, ok)
+
+        if not ok:
+            LOGGER.warning("Polling timeout su indirizzo %s", address)
 
     def _send_frame(self, frame: bytes) -> bool:
         serial = self._serial
         if serial is None:
             return False
         return serial.send_frame(frame)
+
+    def _send_with_ack(
+        self,
+        frame: bytes,
+        address: int,
+        matcher: Callable[[ParsedFrame], bool],
+        timeout: float,
+    ) -> tuple[bool, ParsedFrame | None]:
+        waiter = _AckWaiter(address=address, matcher=matcher)
+        with self._ack_lock:
+            self._ack_waiters.append(waiter)
+
+        sent = self._send_frame(frame)
+        if not sent:
+            self._discard_waiter(waiter)
+            return False, None
+
+        completed = waiter.event.wait(timeout)
+        if not completed:
+            self._discard_waiter(waiter)
+            return False, None
+
+        return True, waiter.frame
+
+    def _discard_waiter(self, waiter: _AckWaiter) -> None:
+        with self._ack_lock:
+            if waiter in self._ack_waiters:
+                self._ack_waiters.remove(waiter)
+
+    def _resolve_waiters(self, frame: ParsedFrame) -> None:
+        with self._ack_lock:
+            resolved: list[_AckWaiter] = []
+            for waiter in self._ack_waiters:
+                if waiter.address != frame.address:
+                    continue
+
+                try:
+                    if not waiter.matcher(frame):
+                        continue
+                except Exception:
+                    LOGGER.exception("Errore matcher ack")
+                    continue
+
+                waiter.frame = frame
+                waiter.event.set()
+                resolved.append(waiter)
+
+            for waiter in resolved:
+                self._ack_waiters.remove(waiter)
 
     def _topic_prefix(self, board: BoardConfig) -> str:
         return f"{self._config.mqtt.base_topic}/{board.topic_slug}"
@@ -194,6 +266,30 @@ class BridgeService:
         if mqtt is None:
             return
         mqtt.publish(topic, payload, retain=retain)
+
+    def _publish_action_result(self, board: BoardConfig, action: str, success: bool, detail: str) -> None:
+        if not board.publish_enabled:
+            return
+
+        topic_prefix = self._topic_prefix(board)
+        payload = {
+            "action": action,
+            "success": success,
+            "detail": detail,
+            "ts": int(time.time()),
+        }
+        self._publish(f"{topic_prefix}/action/result", payload, retain=False)
+
+    def _publish_poll_result(self, board: BoardConfig, success: bool) -> None:
+        if not board.publish_enabled:
+            return
+
+        topic_prefix = self._topic_prefix(board)
+        payload = {
+            "success": success,
+            "ts": int(time.time()),
+        }
+        self._publish(f"{topic_prefix}/poll/last", payload, retain=True)
 
     def _handle_mqtt_connected(self) -> None:
         self._publish_discovery()
@@ -219,6 +315,8 @@ class BridgeService:
 
         board = self._boards_by_topic.get(board_slug)
         if board is None:
+            return
+        if not board.publish_enabled:
             return
 
         if command_path == "poll/set":
@@ -262,13 +360,25 @@ class BridgeService:
             return
 
         frame = build_light_control(board.address, channel, state)
-        self._send_frame(frame)
+        expected_data0 = frame[3]
+        expected_command = frame[2]
+        ok, _ = self._send_with_ack(
+            frame=frame,
+            address=board.address,
+            matcher=lambda rx: rx.command == expected_command and rx.data[0] == expected_data0,
+            timeout=COMMAND_ACK_TIMEOUT_SEC,
+        )
+
+        if not ok:
+            self._publish_action_result(board, "light_set", False, f"timeout channel={channel}")
+            return
 
         topic_prefix = self._topic_prefix(board)
         channel_state = "ON" if state else "OFF"
         self._publish(f"{topic_prefix}/ch/{channel}/state", channel_state, retain=True)
         if publish_legacy_state or len(board.channels) == 1:
             self._publish(f"{topic_prefix}/state", channel_state, retain=True)
+        self._publish_action_result(board, "light_set", True, f"channel={channel} state={channel_state}")
 
     def _handle_shutter_command(self, board: BoardConfig, command_path: str, payload: str) -> None:
         if command_path != "set":
@@ -288,10 +398,26 @@ class BridgeService:
             return
 
         frame = build_shutter_control(board.address, board.primary_channel, up)
-        self._send_frame(frame)
+        expected_data0 = frame[3]
+        expected_data1 = frame[4]
+        expected_command = frame[2]
+        ok, _ = self._send_with_ack(
+            frame=frame,
+            address=board.address,
+            matcher=lambda rx: (
+                rx.command == expected_command
+                and rx.data[0] == expected_data0
+                and rx.data[1] == expected_data1
+            ),
+            timeout=COMMAND_ACK_TIMEOUT_SEC,
+        )
+        if not ok:
+            self._publish_action_result(board, "shutter_set", False, f"timeout channel={board.primary_channel}")
+            return
 
         topic_prefix = self._topic_prefix(board)
         self._publish(f"{topic_prefix}/state", state, retain=True)
+        self._publish_action_result(board, "shutter_set", True, state)
 
     def _handle_dimmer_command(self, board: BoardConfig, command_path: str, payload: str) -> None:
         percent: int | None = None
@@ -316,7 +442,22 @@ class BridgeService:
             return
 
         frame = build_dimmer_control(board.address, percent)
-        self._send_frame(frame)
+        expected_command = frame[2]
+        expected_data0 = frame[3]
+        expected_data1 = frame[4]
+        ok, _ = self._send_with_ack(
+            frame=frame,
+            address=board.address,
+            matcher=lambda rx: (
+                rx.command == expected_command
+                and rx.data[0] == expected_data0
+                and rx.data[1] == expected_data1
+            ),
+            timeout=COMMAND_ACK_TIMEOUT_SEC,
+        )
+        if not ok:
+            self._publish_action_result(board, "dimmer_set", False, "timeout")
+            return
 
         if percent > 0:
             self._dimmer_cache[board.board_id] = percent
@@ -325,6 +466,7 @@ class BridgeService:
         brightness_255 = int(round((percent / 100.0) * 255))
         self._publish(f"{topic_prefix}/state", "ON" if percent > 0 else "OFF", retain=True)
         self._publish(f"{topic_prefix}/brightness/state", brightness_255, retain=True)
+        self._publish_action_result(board, "dimmer_set", True, f"percent={percent}")
 
     def _handle_thermostat_command(self, board: BoardConfig, command_path: str, payload: str) -> None:
         topic_prefix = self._topic_prefix(board)
@@ -334,8 +476,24 @@ class BridgeService:
             if setpoint is None:
                 return
             frame = build_set_point_temperature(board.address, setpoint)
-            self._send_frame(frame)
+            expected_command = frame[2]
+            expected_data0 = frame[3]
+            expected_data1 = frame[4]
+            ok, _ = self._send_with_ack(
+                frame=frame,
+                address=board.address,
+                matcher=lambda rx: (
+                    rx.command == expected_command
+                    and rx.data[0] == expected_data0
+                    and rx.data[1] == expected_data1
+                ),
+                timeout=COMMAND_ACK_TIMEOUT_SEC,
+            )
+            if not ok:
+                self._publish_action_result(board, "setpoint_set", False, "timeout")
+                return
             self._publish(f"{topic_prefix}/setpoint/state", round(setpoint, 1), retain=True)
+            self._publish_action_result(board, "setpoint_set", True, f"setpoint={round(setpoint, 1)}")
             return
 
         if command_path == "season/set":
@@ -343,11 +501,24 @@ class BridgeService:
             if season is None:
                 return
             frame = build_set_season(board.address, season)
-            self._send_frame(frame)
+            expected_command = frame[2]
+            expected_data0 = frame[3]
+            ok, _ = self._send_with_ack(
+                frame=frame,
+                address=board.address,
+                matcher=lambda rx: rx.command == expected_command and rx.data[0] == expected_data0,
+                timeout=COMMAND_ACK_TIMEOUT_SEC,
+            )
+            if not ok:
+                self._publish_action_result(board, "season_set", False, "timeout")
+                return
             self._publish(f"{topic_prefix}/season/state", "SUMMER" if season == 1 else "WINTER", retain=True)
+            self._publish_action_result(board, "season_set", True, f"season={season}")
 
     def _handle_serial_frame(self, frame: ParsedFrame) -> None:
-        if frame.command != CMD_POLLING_EXTENDED:
+        self._resolve_waiters(frame)
+
+        if frame.command not in (CMD_POLLING_EXTENDED, CMD_POLLING_RESPONSE):
             return
 
         try:
@@ -361,6 +532,9 @@ class BridgeService:
             self._publish_board_state_from_polling(board, polling)
 
     def _publish_board_state_from_polling(self, board: BoardConfig, polling) -> None:
+        if not board.publish_enabled:
+            return
+
         topic_prefix = self._topic_prefix(board)
 
         raw_payload: dict[str, Any] = {
@@ -427,7 +601,8 @@ class BridgeService:
         self._publish(poll_button_topic, poll_button_payload, retain=True)
 
         for board in self._config.boards:
-            if not board.enabled:
+            if not board.enabled or not board.publish_enabled:
+                self._clear_discovery_for_board(board)
                 continue
             self._publish_discovery_for_board(board)
 
@@ -541,6 +716,49 @@ class BridgeService:
                 "device": device,
             }
             self._publish(season_topic, season_payload, retain=True)
+
+    def _clear_discovery_for_board(self, board: BoardConfig) -> None:
+        discovery_prefix = self._config.mqtt.discovery_prefix
+
+        self._publish(
+            f"{discovery_prefix}/button/cerebro2mqtt_{board.board_id}_poll/config",
+            "",
+            retain=True,
+        )
+
+        if board.board_type == BoardType.LIGHTS:
+            for channel in board.channels:
+                self._publish(
+                    f"{discovery_prefix}/switch/cerebro2mqtt_{board.board_id}_ch{channel}/config",
+                    "",
+                    retain=True,
+                )
+            return
+
+        if board.board_type == BoardType.SHUTTERS:
+            self._publish(f"{discovery_prefix}/cover/cerebro2mqtt_{board.board_id}/config", "", retain=True)
+            return
+
+        if board.board_type == BoardType.DIMMER:
+            self._publish(f"{discovery_prefix}/light/cerebro2mqtt_{board.board_id}/config", "", retain=True)
+            return
+
+        if board.board_type == BoardType.THERMOSTAT:
+            self._publish(
+                f"{discovery_prefix}/sensor/cerebro2mqtt_{board.board_id}_temperature/config",
+                "",
+                retain=True,
+            )
+            self._publish(
+                f"{discovery_prefix}/number/cerebro2mqtt_{board.board_id}_setpoint/config",
+                "",
+                retain=True,
+            )
+            self._publish(
+                f"{discovery_prefix}/select/cerebro2mqtt_{board.board_id}_season/config",
+                "",
+                retain=True,
+            )
 
 
 def _parse_on_off(payload: str) -> bool | None:

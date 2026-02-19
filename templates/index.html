@@ -224,6 +224,7 @@
                 <th>Canale da</th>
                 <th>Canale a</th>
                 <th>Topic (opzionale)</th>
+                <th>Pubblica MQTT</th>
                 <th>Abilitata</th>
                 <th></th>
               </tr>
@@ -355,6 +356,12 @@
         topicInput.value = board.topic || "";
         tdTopic.appendChild(topicInput);
 
+        const tdPublish = document.createElement("td");
+        const publishInput = document.createElement("input");
+        publishInput.type = "checkbox";
+        publishInput.checked = board.publish_enabled ?? true;
+        tdPublish.appendChild(publishInput);
+
         const tdEnabled = document.createElement("td");
         const enabledInput = document.createElement("input");
         enabledInput.type = "checkbox";
@@ -375,6 +382,7 @@
         tr.appendChild(tdChannelStart);
         tr.appendChild(tdChannelEnd);
         tr.appendChild(tdTopic);
+        tr.appendChild(tdPublish);
         tr.appendChild(tdEnabled);
         tr.appendChild(tdDelete);
 
@@ -413,7 +421,8 @@
             channel_start: channelStart,
             channel_end: channelEnd,
             topic: cells[5].querySelector("input").value.trim(),
-            enabled: cells[6].querySelector("input").checked,
+            publish_enabled: cells[6].querySelector("input").checked,
+            enabled: cells[7].querySelector("input").checked,
           };
         });
       }

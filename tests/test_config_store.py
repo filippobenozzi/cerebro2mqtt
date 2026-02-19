@@ -86,6 +86,28 @@ class ConfigStoreTest(unittest.TestCase):
             with self.assertRaises(ConfigError):
                 store.update_from_dict(payload)
 
+    def test_publish_enabled_flag(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "config.json"
+            store = ConfigStore(path)
+            payload = store.config.to_dict()
+            payload["boards"] = [
+                {
+                    "id": "1",
+                    "name": "Scheda Non Pubblicata",
+                    "type": "luci",
+                    "address": 2,
+                    "channel_start": 1,
+                    "channel_end": 1,
+                    "topic": "non_pubblicata",
+                    "publish_enabled": False,
+                    "enabled": True,
+                }
+            ]
+
+            cfg = store.update_from_dict(payload)
+            self.assertFalse(cfg.boards[0].publish_enabled)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,6 +5,7 @@ from app.protocol import (
     CMD_LIGHT_CONTROL_START_FIRST_FOUR,
     CMD_LIGHT_CONTROL_START_FIFTH_ONWARD,
     CMD_POLLING_EXTENDED,
+    CMD_POLLING_RESPONSE,
     CMD_SHUTTER_CONTROL,
     build_dimmer_control,
     build_light_control,
@@ -63,6 +64,28 @@ class ProtocolTest(unittest.TestCase):
         self.assertEqual(polling.outputs, 0b00000101)
         self.assertEqual(polling.dimmer_0_10, 4)
         self.assertAlmostEqual(polling.temperature, 22.0)
+
+    def test_parse_polling_status_accepts_0x50(self):
+        raw = bytes([
+            0x49,
+            0x02,
+            CMD_POLLING_RESPONSE,
+            0x11,
+            0b00000001,
+            0x00,
+            0x04,
+            0x16,
+            0x00,
+            0x00,
+            0x02,
+            0x02,
+            0x01,
+            0x46,
+        ])
+
+        parsed = parse_frame(raw)
+        polling = parse_polling_status(parsed)
+        self.assertEqual(polling.outputs, 0b00000001)
 
 
 if __name__ == "__main__":

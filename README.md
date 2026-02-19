@@ -11,6 +11,7 @@ Bridge BUS/seriale proprietario -> MQTT con discovery automatico Home Assistant,
   - broker MQTT
   - polling
   - elenco schede (`luci`, `tapparelle`, `termostato`, `dimmer`)
+- toggle `Pubblica MQTT` per singola scheda
   - comando di riavvio servizio
 - Salvataggio configurazione in JSON locale (`CEREBRO_CONFIG`, default `./config/config.json`).
 - Discovery Home Assistant automatico (entita + pulsanti polling):
@@ -129,6 +130,7 @@ sudo journalctl -u cerebro2mqtt.service -f
       "channel_start": 1,
       "channel_end": 8,
       "topic": "luci_piano_terra",
+      "publish_enabled": true,
       "enabled": true
     }
   ]
@@ -147,6 +149,7 @@ Base topic default: `cerebro2mqtt`
 
 - Polling singola scheda:
   - `cerebro2mqtt/<slug>/poll/set`
+  - esito polling: `cerebro2mqtt/<slug>/poll/last` (JSON con `success`)
 
 - Luci:
   - cmd per canale: `cerebro2mqtt/<slug>/ch/<canale>/set` (`ON`/`OFF`)
@@ -173,9 +176,13 @@ Base topic default: `cerebro2mqtt`
 Per debug polling grezzo:
 - `cerebro2mqtt/<slug>/polling/raw`
 
+Esito azioni (ack dal BUS):
+- `cerebro2mqtt/<slug>/action/result` (JSON con `action`, `success`, `detail`)
+
 ## Home Assistant
 
 Il bridge pubblica automaticamente discovery su `homeassistant/.../config` con payload retained.
+Se una scheda ha `publish_enabled=false`, le entita discovery di quella scheda vengono rimosse.
 
 Entita create:
 
@@ -197,6 +204,12 @@ Implementazione coerente con i file C forniti:
 - Luci: comandi `0x51..0x54` e `0x65..0x68`
 - Tapparelle: `0x5C`
 - Dimmer: `0x5B`
+
+## Verifica ritorno comandi
+
+Per ogni comando inviato (luci/tapparelle/dimmer/termostato) il bridge aspetta il frame di ritorno della scheda prima di confermare lo stato su MQTT.
+Se non arriva risposta entro timeout, pubblica `success=false` su `<slug>/action/result` e non conferma il nuovo stato.
+Per il polling vengono accettate risposte sia `0x40` che `0x50`.
 
 ## Test base
 
