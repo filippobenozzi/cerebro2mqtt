@@ -25,6 +25,7 @@ CMD_LIGHT_DATA_RELAY_OFF = 0x53
 
 CMD_SHUTTER_DATA_UP = 0x55
 CMD_SHUTTER_DATA_DOWN = 0x44
+CMD_SHUTTER_DATA_STOP = 0x53
 CMD_DIMMER_DATA = 0x53
 
 
@@ -122,6 +123,12 @@ def build_shutter_control(address: int, shutter_index: int, up: bool) -> bytes:
         raise ProtocolError("shutter_index deve essere fra 1 e 4")
     action = CMD_SHUTTER_DATA_UP if up else CMD_SHUTTER_DATA_DOWN
     return build_frame(address, CMD_SHUTTER_CONTROL, [shutter_index, action])
+
+
+def build_shutter_stop(address: int, shutter_index: int) -> bytes:
+    if shutter_index < 1 or shutter_index > 4:
+        raise ProtocolError("shutter_index deve essere fra 1 e 4")
+    return build_frame(address, CMD_SHUTTER_CONTROL, [shutter_index, CMD_SHUTTER_DATA_STOP])
 
 
 def percent_to_bus_dimmer(percent: int) -> int:

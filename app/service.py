@@ -30,6 +30,7 @@ from app.protocol import (
     build_set_point_temperature,
     build_set_season,
     build_shutter_control,
+    build_shutter_stop,
     bus_dimmer_to_percent,
     percent_to_bus_dimmer,
     parse_polling_status,
@@ -561,19 +562,22 @@ class BridgeService:
             return
 
         normalized = payload.strip().upper()
+        is_stop = normalized == "STOP"
         if normalized in {"OPEN", "UP", "ON", "1"}:
             up = True
             state = "opening"
+            frame = build_shutter_control(board.address, channel, up)
         elif normalized in {"CLOSE", "DOWN", "OFF", "0"}:
             up = False
             state = "closing"
-        elif normalized == "STOP":
-            LOGGER.warning("STOP non supportato dal protocollo tapparelle")
-            return
+            frame = build_shutter_control(board.address, channel, up)
+        elif is_stop:
+            up = None
+            state = "stopped"
+            frame = build_shutter_stop(board.address, channel)
         else:
             return
 
-        frame = build_shutter_control(board.address, channel, up)
         expected_data0 = frame[3]
         expected_data1 = frame[4]
         expected_command = frame[2]
@@ -588,7 +592,11 @@ class BridgeService:
             timeout=COMMAND_ACK_TIMEOUT_SEC,
         )
         poll_ok, polling = self._request_polling_status(board.address, COMMAND_ACK_TIMEOUT_SEC)
-        if poll_ok and polling is not None:
+        if is_stop:
+            ok = ack_ok or poll_ok
+            if poll_ok and polling is not None:
+                self._publish_board_state_from_polling(board, polling)
+        elif poll_ok and polling is not None:
             bit = 1 << (channel - 1)
             is_open = (polling.outputs & bit) != 0
             ok = is_open == up
@@ -614,7 +622,9 @@ class BridgeService:
             )
             return
 
-        if not poll_ok:
+        if is_stop:
+            self._publish_shutter_channel_state(board, channel, state)
+        elif not poll_ok:
             self._publish_shutter_channel_state(board, channel, state)
         self._publish_action_result(board, "shutter_set", True, f"channel={channel} state={state}")
 
@@ -764,7 +774,8 @@ class BridgeService:
                 return
 
             if not poll_ok:
-                self._publish(f"{topic_prefix}/season/state", "SUMMER" if season == 1 else "WINTER", retain=True)
+                self._publish(f"{topic_prefix}/season/state", _season_to_label(season), retain=True)
+                self._publish(f"{topic_prefix}/climate/mode/state", _season_to_hvac_mode(season), retain=True)
             self._publish_action_result(board, "season_set", True, f"season={season}")
 
     def _handle_serial_frame(self, frame: ParsedFrame) -> None:
@@ -832,8 +843,8 @@ class BridgeService:
         if board.board_type == BoardType.THERMOSTAT:
             self._publish(f"{topic_prefix}/temperature/state", round(polling.temperature, 1), retain=True)
             self._publish(f"{topic_prefix}/setpoint/state", round(polling.temperature_setpoint, 1), retain=True)
-            season = "SUMMER" if polling.season == 1 else "WINTER"
-            self._publish(f"{topic_prefix}/season/state", season, retain=True)
+            self._publish(f"{topic_prefix}/season/state", _season_to_label(polling.season), retain=True)
+            self._publish(f"{topic_prefix}/climate/mode/state", _season_to_hvac_mode(polling.season), retain=True)
 
     def _publish_discovery(self) -> None:
         base = self._config.mqtt.base_topic
@@ -917,6 +928,7 @@ class BridgeService:
                     "state_opening": "opening",
                     "state_closed": "closed",
                     "state_closing": "closing",
+                    "state_stopped": "stopped",
                     "device": device,
                 }
                 self._publish(config_topic, payload, retain=True)
@@ -948,6 +960,7 @@ class BridgeService:
                     "state_opening": "opening",
                     "state_closed": "closed",
                     "state_closing": "closing",
+                    "state_stopped": "stopped",
                     "device": device,
                 }
                 self._publish(config_topic, payload, retain=True)
@@ -983,31 +996,36 @@ class BridgeService:
             }
             self._publish(temp_sensor_topic, temp_sensor_payload, retain=True)
 
-            setpoint_topic = f"{discovery_prefix}/number/cerebro2mqtt_{board.board_id}_setpoint/config"
-            setpoint_payload = {
-                "name": f"{board.name} Setpoint",
-                "unique_id": f"cerebro2mqtt_{board.board_id}_setpoint",
-                "command_topic": f"{topic_prefix}/setpoint/set",
-                "state_topic": f"{topic_prefix}/setpoint/state",
-                "mode": "box",
-                "min": 5,
-                "max": 35,
-                "step": 0.5,
-                "unit_of_measurement": "C",
+            climate_topic = f"{discovery_prefix}/climate/cerebro2mqtt_{board.board_id}/config"
+            climate_payload = {
+                "name": board.name,
+                "unique_id": f"cerebro2mqtt_{board.board_id}",
+                "mode_command_topic": f"{topic_prefix}/season/set",
+                "mode_state_topic": f"{topic_prefix}/climate/mode/state",
+                "modes": ["heat", "cool"],
+                "temperature_command_topic": f"{topic_prefix}/setpoint/set",
+                "temperature_state_topic": f"{topic_prefix}/setpoint/state",
+                "current_temperature_topic": f"{topic_prefix}/temperature/state",
+                "min_temp": 5,
+                "max_temp": 35,
+                "temp_step": 0.5,
+                "temperature_unit": "C",
                 "device": device,
             }
-            self._publish(setpoint_topic, setpoint_payload, retain=True)
+            self._publish(climate_topic, climate_payload, retain=True)
 
-            season_topic = f"{discovery_prefix}/select/cerebro2mqtt_{board.board_id}_season/config"
-            season_payload = {
-                "name": f"{board.name} Stagione",
-                "unique_id": f"cerebro2mqtt_{board.board_id}_season",
-                "command_topic": f"{topic_prefix}/season/set",
-                "state_topic": f"{topic_prefix}/season/state",
-                "options": ["WINTER", "SUMMER"],
-                "device": device,
-            }
-            self._publish(season_topic, season_payload, retain=True)
+            # Cleanup entita legacy (setpoint number + season select) se presenti da versioni precedenti.
+            self._publish(
+                f"{discovery_prefix}/number/cerebro2mqtt_{board.board_id}_setpoint/config",
+                "",
+                retain=True,
+            )
+            self._publish(
+                f"{discovery_prefix}/select/cerebro2mqtt_{board.board_id}_season/config",
+                "",
+                retain=True,
+            )
+            return
 
     def _clear_discovery_for_board(self, board: BoardConfig) -> None:
         discovery_prefix = self._config.mqtt.discovery_prefix
@@ -1048,6 +1066,11 @@ class BridgeService:
                 retain=True,
             )
             self._publish(
+                f"{discovery_prefix}/climate/cerebro2mqtt_{board.board_id}/config",
+                "",
+                retain=True,
+            )
+            self._publish(
                 f"{discovery_prefix}/number/cerebro2mqtt_{board.board_id}_setpoint/config",
                 "",
                 retain=True,
@@ -1084,8 +1107,16 @@ def _parse_float(payload: str) -> float | None:
 
 def _parse_season(payload: str) -> int | None:
     normalized = payload.strip().upper()
-    if normalized in {"0", "WINTER", "INVERNO"}:
+    if normalized in {"0", "WINTER", "INVERNO", "HEAT"}:
         return 0
-    if normalized in {"1", "SUMMER", "ESTATE"}:
+    if normalized in {"1", "SUMMER", "ESTATE", "COOL"}:
         return 1
     return None
+
+
+def _season_to_label(season: int) -> str:
+    return "SUMMER" if season == 1 else "WINTER"
+
+
+def _season_to_hvac_mode(season: int) -> str:
+    return "cool" if season == 1 else "heat"

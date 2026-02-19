@@ -164,7 +164,7 @@ Base topic default: `cerebro2mqtt`
   - esempio: `cerebro2mqtt/luci_piano_terra/ch/1/set`
 
 - Tapparelle:
-  - cmd per canale: `cerebro2mqtt/<slug>/ch/<canale>/set` (`OPEN`/`CLOSE`)
+  - cmd per canale: `cerebro2mqtt/<slug>/ch/<canale>/set` (`OPEN`/`CLOSE`/`STOP`)
   - state per canale: `cerebro2mqtt/<slug>/ch/<canale>/state`
   - legacy singolo canale: `cerebro2mqtt/<slug>/set` e `cerebro2mqtt/<slug>/state`
   - range canali supportato in configurazione: `1..4`
@@ -179,8 +179,9 @@ Base topic default: `cerebro2mqtt`
   - setpoint cmd: `cerebro2mqtt/<slug>/setpoint/set`
   - setpoint state: `cerebro2mqtt/<slug>/setpoint/state`
   - temperatura state: `cerebro2mqtt/<slug>/temperature/state`
-  - stagione cmd: `cerebro2mqtt/<slug>/season/set` (`WINTER`/`SUMMER`)
+  - stagione cmd: `cerebro2mqtt/<slug>/season/set` (`WINTER`/`SUMMER` o `HEAT`/`COOL`)
   - stagione state: `cerebro2mqtt/<slug>/season/state`
+  - clima mode state (per entita thermostat HA): `cerebro2mqtt/<slug>/climate/mode/state` (`heat`/`cool`)
 
 Per debug polling grezzo:
 - `cerebro2mqtt/<slug>/polling/raw`
@@ -200,7 +201,7 @@ Entita create:
 - `switch` per `luci` (uno per ogni canale nel range configurato)
 - `cover` per `tapparelle` (uno per canale se configuri un range)
 - `light` per `dimmer`
-- `sensor` temperatura + `number` setpoint + `select` stagione per `termostato`
+- `sensor` temperatura + `climate` per `termostato`
 
 ## Note protocollo usato
 

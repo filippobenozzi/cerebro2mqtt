@@ -7,10 +7,12 @@ from app.protocol import (
     CMD_POLLING_EXTENDED,
     CMD_POLLING_RESPONSE,
     CMD_SHUTTER_CONTROL,
+    CMD_SHUTTER_DATA_STOP,
     build_dimmer_control,
     build_light_control,
     build_polling_extended,
     build_shutter_control,
+    build_shutter_stop,
     ProtocolError,
     parse_frame,
     parse_polling_status,
@@ -43,6 +45,12 @@ class ProtocolTest(unittest.TestCase):
     def test_build_shutter_rejects_channel_out_of_range(self):
         with self.assertRaises(ProtocolError):
             build_shutter_control(7, 5, True)
+
+    def test_build_shutter_stop(self):
+        shutter = build_shutter_stop(7, 2)
+        self.assertEqual(shutter[2], CMD_SHUTTER_CONTROL)
+        self.assertEqual(shutter[3], 0x02)
+        self.assertEqual(shutter[4], CMD_SHUTTER_DATA_STOP)
 
     def test_parse_polling_status(self):
         raw = bytes([
