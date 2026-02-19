@@ -198,7 +198,7 @@ Entita create:
 
 - Pulsante `Cerebro Polling` (globale)
 - Pulsante polling per ogni scheda
-- `switch` per `luci` (uno per ogni canale nel range configurato)
+- `light` per `luci` (uno per ogni canale nel range configurato)
 - `cover` per `tapparelle` (uno per canale se configuri un range)
 - `light` per `dimmer`
 - `sensor` temperatura + `climate` per `termostato`

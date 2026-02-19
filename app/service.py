@@ -896,8 +896,21 @@ class BridgeService:
         self._publish(poll_button_topic, poll_button_payload, retain=True)
 
         if board.board_type == BoardType.LIGHTS:
-            for channel in board.channels:
-                config_topic = f"{discovery_prefix}/switch/cerebro2mqtt_{board.board_id}_ch{channel}/config"
+            all_channels = range(1, 9)
+            channels = set(board.channels)
+            for channel in all_channels:
+                # Cleanup discovery legacy: in versioni precedenti le luci erano pubblicate come switch.
+                self._publish(
+                    f"{discovery_prefix}/switch/cerebro2mqtt_{board.board_id}_ch{channel}/config",
+                    "",
+                    retain=True,
+                )
+
+                config_topic = f"{discovery_prefix}/light/cerebro2mqtt_{board.board_id}_ch{channel}/config"
+                if channel not in channels:
+                    self._publish(config_topic, "", retain=True)
+                    continue
+
                 payload = {
                     "name": f"{board.name} CH{channel}",
                     "unique_id": f"cerebro2mqtt_{board.board_id}_ch{channel}",
@@ -1037,9 +1050,14 @@ class BridgeService:
         )
 
         if board.board_type == BoardType.LIGHTS:
-            for channel in board.channels:
+            for channel in range(1, 9):
                 self._publish(
                     f"{discovery_prefix}/switch/cerebro2mqtt_{board.board_id}_ch{channel}/config",
+                    "",
+                    retain=True,
+                )
+                self._publish(
+                    f"{discovery_prefix}/light/cerebro2mqtt_{board.board_id}_ch{channel}/config",
                     "",
                     retain=True,
                 )
