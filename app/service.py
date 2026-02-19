@@ -13,8 +13,16 @@ from app.config_store import ConfigStore
 from app.models import AppConfig, BoardConfig, BoardType
 from app.mqtt_bridge import MqttBridge
 from app.protocol import (
+    CMD_DIMMER_CONTROL,
+    CMD_DIMMER_DATA,
+    CMD_LIGHT_CONTROL_START_FIFTH_ONWARD,
+    CMD_LIGHT_CONTROL_START_FIRST_FOUR,
+    CMD_LIGHT_DATA_RELAY_OFF,
+    CMD_LIGHT_DATA_RELAY_ON,
     CMD_POLLING_EXTENDED,
     CMD_POLLING_RESPONSE,
+    CMD_SET_POINT_TEMPERATURE,
+    CMD_SET_SEASON,
     ParsedFrame,
     build_dimmer_control,
     build_light_control,
@@ -292,6 +300,80 @@ class BridgeService:
         }
         self._publish(f"{topic_prefix}/poll/last", payload, retain=True)
 
+    def _publish_light_channel_state(self, board: BoardConfig, channel: int, is_on: bool) -> None:
+        if not board.publish_enabled:
+            return
+        if channel not in board.channels:
+            return
+
+        topic_prefix = self._topic_prefix(board)
+        state = "ON" if is_on else "OFF"
+        self._publish(f"{topic_prefix}/ch/{channel}/state", state, retain=True)
+        if len(board.channels) == 1 or channel == board.primary_channel:
+            self._publish(f"{topic_prefix}/state", state, retain=True)
+
+    def _handle_non_polling_frame(self, frame: ParsedFrame) -> None:
+        boards = self._boards_by_address.get(frame.address, [])
+        if not boards:
+            return
+
+        command = frame.command
+
+        if (
+            CMD_LIGHT_CONTROL_START_FIRST_FOUR <= command <= (CMD_LIGHT_CONTROL_START_FIRST_FOUR + 3)
+            or CMD_LIGHT_CONTROL_START_FIFTH_ONWARD <= command <= (CMD_LIGHT_CONTROL_START_FIFTH_ONWARD + 3)
+        ):
+            if command >= CMD_LIGHT_CONTROL_START_FIFTH_ONWARD:
+                channel = (command - CMD_LIGHT_CONTROL_START_FIFTH_ONWARD) + 5
+            else:
+                channel = (command - CMD_LIGHT_CONTROL_START_FIRST_FOUR) + 1
+
+            if frame.data[0] == CMD_LIGHT_DATA_RELAY_ON:
+                is_on = True
+            elif frame.data[0] == CMD_LIGHT_DATA_RELAY_OFF:
+                is_on = False
+            else:
+                return
+
+            for board in boards:
+                if board.board_type != BoardType.LIGHTS:
+                    continue
+                self._publish_light_channel_state(board, channel, is_on)
+            return
+
+        if command == CMD_DIMMER_CONTROL:
+            if frame.data[0] != CMD_DIMMER_DATA:
+                return
+            raw = 10 if frame.data[1] > 8 else int(frame.data[1])
+            percent = bus_dimmer_to_percent(raw)
+            brightness_255 = int(round((percent / 100.0) * 255))
+            for board in boards:
+                if board.board_type != BoardType.DIMMER or not board.publish_enabled:
+                    continue
+                self._dimmer_cache[board.board_id] = percent
+                topic_prefix = self._topic_prefix(board)
+                self._publish(f"{topic_prefix}/state", "ON" if percent > 0 else "OFF", retain=True)
+                self._publish(f"{topic_prefix}/brightness/state", brightness_255, retain=True)
+            return
+
+        if command == CMD_SET_POINT_TEMPERATURE:
+            setpoint = float(frame.data[0]) + (float(frame.data[1]) / 10.0)
+            for board in boards:
+                if board.board_type != BoardType.THERMOSTAT or not board.publish_enabled:
+                    continue
+                topic_prefix = self._topic_prefix(board)
+                self._publish(f"{topic_prefix}/setpoint/state", round(setpoint, 1), retain=True)
+            return
+
+        if command == CMD_SET_SEASON:
+            season = frame.data[0]
+            label = "SUMMER" if season == 1 else "WINTER"
+            for board in boards:
+                if board.board_type != BoardType.THERMOSTAT or not board.publish_enabled:
+                    continue
+                topic_prefix = self._topic_prefix(board)
+                self._publish(f"{topic_prefix}/season/state", label, retain=True)
+
     def _request_polling_status(self, address: int, timeout: float) -> tuple[bool, Any | None]:
         frame = build_polling_extended(address)
         ok, rx = self._send_with_ack(
@@ -398,14 +480,20 @@ class BridgeService:
                 if ok:
                     self._publish_board_state_from_polling(board, polling)
 
+        channel_state = "ON" if state else "OFF"
+        self._publish_light_channel_state(board, channel, state)
+
         if not ok:
-            self._publish_action_result(board, "light_set", False, f"timeout channel={channel}")
+            self._publish_action_result(
+                board,
+                "light_set",
+                False,
+                f"timeout channel={channel} desired={channel_state}",
+            )
             return
 
-        topic_prefix = self._topic_prefix(board)
-        channel_state = "ON" if state else "OFF"
-        self._publish(f"{topic_prefix}/ch/{channel}/state", channel_state, retain=True)
-        if publish_legacy_state or len(board.channels) == 1:
+        if publish_legacy_state:
+            topic_prefix = self._topic_prefix(board)
             self._publish(f"{topic_prefix}/state", channel_state, retain=True)
         self._publish_action_result(board, "light_set", True, f"channel={channel} state={channel_state}")
 
@@ -448,12 +536,19 @@ class BridgeService:
                 ok = is_open == up
                 if ok:
                     self._publish_board_state_from_polling(board, polling)
-        if not ok:
-            self._publish_action_result(board, "shutter_set", False, f"timeout channel={board.primary_channel}")
-            return
 
         topic_prefix = self._topic_prefix(board)
         self._publish(f"{topic_prefix}/state", state, retain=True)
+
+        if not ok:
+            self._publish_action_result(
+                board,
+                "shutter_set",
+                False,
+                f"timeout channel={board.primary_channel} desired={state}",
+            )
+            return
+
         self._publish_action_result(board, "shutter_set", True, state)
 
     def _handle_dimmer_command(self, board: BoardConfig, command_path: str, payload: str) -> None:
@@ -502,9 +597,6 @@ class BridgeService:
                 ok = observed_bus == wanted_bus
                 if ok:
                     self._publish_board_state_from_polling(board, polling)
-        if not ok:
-            self._publish_action_result(board, "dimmer_set", False, "timeout")
-            return
 
         if percent > 0:
             self._dimmer_cache[board.board_id] = percent
@@ -513,6 +605,11 @@ class BridgeService:
         brightness_255 = int(round((percent / 100.0) * 255))
         self._publish(f"{topic_prefix}/state", "ON" if percent > 0 else "OFF", retain=True)
         self._publish(f"{topic_prefix}/brightness/state", brightness_255, retain=True)
+
+        if not ok:
+            self._publish_action_result(board, "dimmer_set", False, f"timeout desired_percent={percent}")
+            return
+
         self._publish_action_result(board, "dimmer_set", True, f"percent={percent}")
 
     def _handle_thermostat_command(self, board: BoardConfig, command_path: str, payload: str) -> None:
@@ -543,10 +640,12 @@ class BridgeService:
                     ok = abs(polling.temperature_setpoint - setpoint) <= 0.6
                     if ok:
                         self._publish_board_state_from_polling(board, polling)
-            if not ok:
-                self._publish_action_result(board, "setpoint_set", False, "timeout")
-                return
             self._publish(f"{topic_prefix}/setpoint/state", round(setpoint, 1), retain=True)
+
+            if not ok:
+                self._publish_action_result(board, "setpoint_set", False, f"timeout desired={round(setpoint, 1)}")
+                return
+
             self._publish_action_result(board, "setpoint_set", True, f"setpoint={round(setpoint, 1)}")
             return
 
@@ -569,16 +668,19 @@ class BridgeService:
                     ok = polling.season == season
                     if ok:
                         self._publish_board_state_from_polling(board, polling)
-            if not ok:
-                self._publish_action_result(board, "season_set", False, "timeout")
-                return
             self._publish(f"{topic_prefix}/season/state", "SUMMER" if season == 1 else "WINTER", retain=True)
+
+            if not ok:
+                self._publish_action_result(board, "season_set", False, f"timeout desired={season}")
+                return
+
             self._publish_action_result(board, "season_set", True, f"season={season}")
 
     def _handle_serial_frame(self, frame: ParsedFrame) -> None:
         self._resolve_waiters(frame)
 
         if frame.command not in (CMD_POLLING_EXTENDED, CMD_POLLING_RESPONSE):
+            self._handle_non_polling_frame(frame)
             return
 
         try:
