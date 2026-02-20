@@ -40,6 +40,8 @@ from app.serial_bridge import SerialBridge
 LOGGER = logging.getLogger(__name__)
 COMMAND_ACK_TIMEOUT_SEC = 2.0
 POLL_OFFLINE_AFTER_FAILURES = 3
+POLL_ACK_TIMEOUT_SEC = 2.5
+POLL_RETRIES = 2
 
 
 @dataclass
@@ -210,12 +212,20 @@ class BridgeService:
 
     def _send_poll(self, address: int) -> None:
         frame = build_polling_extended(address)
-        ack_ok, rx = self._send_with_ack(
-            frame=frame,
-            address=address,
-            matcher=lambda rx: rx.command in (CMD_POLLING_EXTENDED, CMD_POLLING_RESPONSE),
-            timeout=COMMAND_ACK_TIMEOUT_SEC,
-        )
+        ack_ok = False
+        rx: ParsedFrame | None = None
+        for attempt in range(POLL_RETRIES + 1):
+            ack_ok, rx = self._send_with_ack(
+                frame=frame,
+                address=address,
+                matcher=lambda rx: rx.command in (CMD_POLLING_EXTENDED, CMD_POLLING_RESPONSE),
+                timeout=POLL_ACK_TIMEOUT_SEC,
+            )
+            if ack_ok and rx is not None:
+                break
+            if attempt < POLL_RETRIES:
+                time.sleep(0.08)
+
         got_response = ack_ok and rx is not None
         poll_ok = False
 
@@ -480,7 +490,7 @@ class BridgeService:
             frame=frame,
             address=address,
             matcher=lambda f: f.command in (CMD_POLLING_EXTENDED, CMD_POLLING_RESPONSE),
-            timeout=timeout,
+            timeout=max(timeout, POLL_ACK_TIMEOUT_SEC),
         )
         if not ok or rx is None:
             return False, None
@@ -491,6 +501,8 @@ class BridgeService:
             LOGGER.exception("Errore parsing polling durante conferma comando")
             return False, None
 
+        self._address_poll_failures[address] = 0
+        self._set_address_availability(address, True)
         return True, polling
 
     def _handle_mqtt_connected(self) -> None:
@@ -918,8 +930,7 @@ class BridgeService:
 
         if board.board_type == BoardType.SHUTTERS:
             for channel in board.channels:
-                bit = 1 << (channel - 1)
-                state = "open" if (polling.outputs & bit) else "closed"
+                state = _shutter_state_from_polling_inputs(channel, polling.inputs)
                 self._publish_shutter_channel_state(board, channel, state)
             return
 
@@ -1277,3 +1288,32 @@ def _board_type_model_label(board_type: BoardType) -> str:
     if board_type == BoardType.THERMOSTAT:
         return "thermostat"
     return board_type.value
+
+
+def _is_input_set(inputs_mask: int, input_index_1_based: int) -> bool:
+    bit = 1 << (input_index_1_based - 1)
+    return (inputs_mask & bit) != 0
+
+
+def _shutter_state_from_polling_inputs(channel: int, inputs_mask: int) -> str:
+    # Mappatura reale ingressi fornita dall'utente:
+    # T1: up=IN3, down=IN1+IN3
+    # T2: up=IN4, down=IN2+IN4
+    # T3: up=IN7, down=IN5+IN7
+    # T4: up=IN8, down=IN6+IN8
+    mapping: dict[int, tuple[int, tuple[int, int]]] = {
+        1: (3, (1, 3)),
+        2: (4, (2, 4)),
+        3: (7, (5, 7)),
+        4: (8, (6, 8)),
+    }
+
+    up_input, down_inputs = mapping.get(channel, (channel, (channel, channel)))
+    up_active = _is_input_set(inputs_mask, up_input)
+    down_active = all(_is_input_set(inputs_mask, idx) for idx in down_inputs)
+
+    if down_active:
+        return "closing"
+    if up_active:
+        return "opening"
+    return "stopped"

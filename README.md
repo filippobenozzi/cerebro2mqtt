@@ -168,6 +168,7 @@ Base topic default: `cerebro2mqtt`
 - Tapparelle:
   - cmd per canale: `cerebro2mqtt/<slug>/ch/<canale>/set` (`OPEN`/`CLOSE`/`STOP`)
   - state per canale: `cerebro2mqtt/<slug>/ch/<canale>/state`
+  - stato da polling basato su ingressi fisici: `opening` / `closing` / `stopped`
   - legacy singolo canale: `cerebro2mqtt/<slug>/set` e `cerebro2mqtt/<slug>/state`
   - range canali supportato in configurazione: `1..4`
 
@@ -196,7 +197,7 @@ Esito azioni (ack dal BUS):
 
 Il bridge pubblica automaticamente discovery su `homeassistant/.../config` con payload retained.
 Se una scheda ha `publish_enabled=false`, le entita discovery di quella scheda vengono rimosse.
-Ogni entita usa `availability_topic`: al reconnect parte `online` (per evitare stati retained bloccanti), torna `online` appena arriva una risposta/frame (o un comando confermato) dalla scheda e passa `offline` dopo timeout polling consecutivi (default 3).
+Ogni entita usa `availability_topic`: al reconnect parte `online` (per evitare stati retained bloccanti), torna `online` appena arriva una risposta/frame (o un comando confermato) dalla scheda e passa `offline` dopo timeout polling consecutivi (default 3). Il polling viene ritentato automaticamente (default 2 retry) prima di marcare il timeout.
 
 Entita create:
 
