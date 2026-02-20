@@ -1,12 +1,12 @@
 services:
-  cerebro2mqtt:
+  algodomo2mqtt:
     build: .
-    container_name: cerebro2mqtt
+    container_name: algodomo2mqtt
     restart: unless-stopped
     ports:
       - "80:80"
     environment:
-      - CEREBRO_CONFIG=/config/config.json
+      - ALGODOMO_CONFIG=/config/config.json
       - LOG_LEVEL=INFO
     volumes:
       - ./data:/config

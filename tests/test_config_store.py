@@ -11,7 +11,7 @@ class ConfigStoreTest(unittest.TestCase):
             path = Path(tmpdir) / "config.json"
             store = ConfigStore(path)
             cfg = store.config
-            self.assertEqual(cfg.mqtt.base_topic, "cerebro2mqtt")
+            self.assertEqual(cfg.mqtt.base_topic, "algodomo2mqtt")
             self.assertTrue(path.exists())
 
     def test_reject_duplicate_topics(self):

@@ -20,7 +20,7 @@ def setup_logging() -> None:
 def main() -> None:
     setup_logging()
 
-    config_path = Path(os.getenv("CEREBRO_CONFIG", "./config/config.json"))
+    config_path = Path(os.getenv("ALGODOMO_CONFIG", "./config/config.json"))
     store = ConfigStore(config_path)
     service = BridgeService(store)
     service.start()

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cerebro2MQTT Config</title>
+    <title>AlgoDomo2MQTT Config</title>
     <style>
       :root {
         --bg: #f6f6f2;
@@ -157,7 +157,7 @@
   <body>
     <div class="wrap">
       <section class="head">
-        <h1>Cerebro2MQTT Configurazione</h1>
+        <h1>AlgoDomo2MQTT Configurazione</h1>
         <p>Configura seriale, broker MQTT, polling, schede BUS e riavvio servizi.</p>
       </section>
 
@@ -225,7 +225,7 @@
           <h2>Riavvio servizi</h2>
           <div class="field">
             <label for="service_restart_command">Comando riavvio servizio (opzionale)</label>
-            <input id="service_restart_command" placeholder="es: systemctl restart cerebro2mqtt.service" />
+            <input id="service_restart_command" placeholder="es: systemctl restart algodomo2mqtt.service" />
           </div>
           <p class="small">`Riavvia servizio` usa il comando qui sopra. `Riavvia app` chiude il processo corrente (utile con systemd/docker restart policy).</p>
           <div class="toolbar">

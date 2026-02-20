@@ -161,8 +161,8 @@ class MQTTConfig:
     port: int = 1883
     username: str = ""
     password: str = ""
-    client_id: str = "cerebro2mqtt"
-    base_topic: str = "cerebro2mqtt"
+    client_id: str = "algodomo2mqtt"
+    base_topic: str = "algodomo2mqtt"
     discovery_prefix: str = "homeassistant"
     keepalive: int = 60
 
@@ -180,16 +180,16 @@ class MQTTConfig:
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "MQTTConfig":
-        raw_base_topic = str(data.get("base_topic", "cerebro2mqtt")).strip().strip("/")
+        raw_base_topic = str(data.get("base_topic", "algodomo2mqtt")).strip().strip("/")
         if not raw_base_topic:
-            raw_base_topic = "cerebro2mqtt"
+            raw_base_topic = "algodomo2mqtt"
 
         return MQTTConfig(
             host=str(data.get("host", "127.0.0.1")).strip() or "127.0.0.1",
             port=int(data.get("port", 1883)),
             username=str(data.get("username", "")),
             password=str(data.get("password", "")),
-            client_id=str(data.get("client_id", "cerebro2mqtt")).strip() or "cerebro2mqtt",
+            client_id=str(data.get("client_id", "algodomo2mqtt")).strip() or "algodomo2mqtt",
             base_topic=raw_base_topic,
             discovery_prefix=str(data.get("discovery_prefix", "homeassistant")).strip() or "homeassistant",
             keepalive=int(data.get("keepalive", 60)),

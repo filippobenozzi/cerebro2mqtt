@@ -1,10 +1,10 @@
 FROM python:3.12-slim
 
-WORKDIR /opt/cerebro2mqtt
+WORKDIR /opt/algodomo2mqtt
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV CEREBRO_CONFIG=/config/config.json
+ENV ALGODOMO_CONFIG=/config/config.json
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt

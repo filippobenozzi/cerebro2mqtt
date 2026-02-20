@@ -1,4 +1,4 @@
-# Cerebro2MQTT
+# AlgoDomo2MQTT
 
 Bridge BUS/seriale proprietario -> MQTT con discovery automatico Home Assistant, pagina web di configurazione (porta 80), polling manuale/automatico e persistenza locale JSON.
 
@@ -13,7 +13,7 @@ Bridge BUS/seriale proprietario -> MQTT con discovery automatico Home Assistant,
   - elenco schede (`luci`, `tapparelle`, `termostato`, `dimmer`)
 - toggle `Pubblica MQTT` per singola scheda
   - comando di riavvio servizio
-- Salvataggio configurazione in JSON locale (`CEREBRO_CONFIG`, default `./config/config.json`).
+- Salvataggio configurazione in JSON locale (`ALGODOMO_CONFIG`, default `./config/config.json`).
 - Discovery Home Assistant automatico (entita + pulsanti polling):
   - pulsante globale polling
   - pulsante polling per ogni scheda
@@ -59,16 +59,16 @@ Lo script:
 
 - installa dipendenze di sistema (`python3`, `python3-venv`, `python3-pip`, `rsync`)
 - disabilita/maska in modo persistente `serial-getty` sulla porta seriale configurata
-- copia il progetto in `/opt/cerebro2mqtt`
+- copia il progetto in `/opt/algodomo2mqtt`
 - crea virtualenv e installa `requirements.txt`
 - crea/aggiorna il servizio `systemd`
-- abilita e avvia `cerebro2mqtt.service`
+- abilita e avvia `algodomo2mqtt.service`
 - mantiene il `config/config.json` esistente in caso di reinstallazione
 
 Variabili opzionali:
 
 ```bash
-sudo INSTALL_DIR=/opt/cerebro2mqtt SERVICE_NAME=cerebro2mqtt.service APP_USER=root bash scripts/install_raspberry.sh
+sudo INSTALL_DIR=/opt/algodomo2mqtt SERVICE_NAME=algodomo2mqtt.service APP_USER=root bash scripts/install_raspberry.sh
 ```
 
 Per usare una porta diversa:
@@ -79,19 +79,19 @@ sudo SERIAL_PORT=/dev/ttyUSB0 bash scripts/install_raspberry.sh
 
 ### Installazione manuale
 
-1. Copia progetto in `/opt/cerebro2mqtt`
+1. Copia progetto in `/opt/algodomo2mqtt`
 2. Copia unit file:
 
 ```bash
-sudo cp systemd/cerebro2mqtt.service /etc/systemd/system/
+sudo cp systemd/algodomo2mqtt.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now cerebro2mqtt.service
+sudo systemctl enable --now algodomo2mqtt.service
 ```
 
 3. Log:
 
 ```bash
-sudo journalctl -u cerebro2mqtt.service -f
+sudo journalctl -u algodomo2mqtt.service -f
 ```
 
 ## Struttura configurazione JSON
@@ -111,8 +111,8 @@ sudo journalctl -u cerebro2mqtt.service -f
     "port": 1883,
     "username": "",
     "password": "",
-    "client_id": "cerebro2mqtt",
-    "base_topic": "cerebro2mqtt",
+    "client_id": "algodomo2mqtt",
+    "base_topic": "algodomo2mqtt",
     "discovery_prefix": "homeassistant",
     "keepalive": 60
   },
@@ -125,7 +125,7 @@ sudo journalctl -u cerebro2mqtt.service -f
     "port": 80
   },
   "service": {
-    "restart_command": "systemctl restart cerebro2mqtt.service"
+    "restart_command": "systemctl restart algodomo2mqtt.service"
   },
   "boards": [
     {
@@ -146,52 +146,52 @@ sudo journalctl -u cerebro2mqtt.service -f
 
 ## Topic MQTT usati
 
-Base topic default: `cerebro2mqtt`
+Base topic default: `algodomo2mqtt`
 
 ### Globali
 
-- `cerebro2mqtt/poll_all/set` -> avvia polling di tutti gli indirizzi configurati
-- `cerebro2mqtt/service/restart/set` -> esegue `service.restart_command`
-- `cerebro2mqtt/service/restart/result` -> esito riavvio servizio (JSON con `success`, `detail`)
+- `algodomo2mqtt/poll_all/set` -> avvia polling di tutti gli indirizzi configurati
+- `algodomo2mqtt/service/restart/set` -> esegue `service.restart_command`
+- `algodomo2mqtt/service/restart/result` -> esito riavvio servizio (JSON con `success`, `detail`)
 
 ### Per scheda (slug = `topic` oppure `name` normalizzato)
 
 - Polling singola scheda:
-  - `cerebro2mqtt/<slug>/poll/set`
-  - esito polling: `cerebro2mqtt/<slug>/poll/last` (JSON con `success`)
+  - `algodomo2mqtt/<slug>/poll/set`
+  - esito polling: `algodomo2mqtt/<slug>/poll/last` (JSON con `success`)
 
 - Luci:
-  - cmd per canale: `cerebro2mqtt/<slug>/ch/<canale>/set` (`ON`/`OFF`)
-  - state per canale: `cerebro2mqtt/<slug>/ch/<canale>/state`
-  - esempio: `cerebro2mqtt/luci_piano_terra/ch/1/set`
+  - cmd per canale: `algodomo2mqtt/<slug>/ch/<canale>/set` (`ON`/`OFF`)
+  - state per canale: `algodomo2mqtt/<slug>/ch/<canale>/state`
+  - esempio: `algodomo2mqtt/luci_piano_terra/ch/1/set`
 
 - Tapparelle:
-  - cmd per canale: `cerebro2mqtt/<slug>/ch/<canale>/set` (`OPEN`/`CLOSE`/`STOP`)
-  - state per canale: `cerebro2mqtt/<slug>/ch/<canale>/state`
+  - cmd per canale: `algodomo2mqtt/<slug>/ch/<canale>/set` (`OPEN`/`CLOSE`/`STOP`)
+  - state per canale: `algodomo2mqtt/<slug>/ch/<canale>/state`
   - stato da polling basato su ingressi fisici: `opening` / `closing` / `stopped`
-  - legacy singolo canale: `cerebro2mqtt/<slug>/set` e `cerebro2mqtt/<slug>/state`
+  - legacy singolo canale: `algodomo2mqtt/<slug>/set` e `algodomo2mqtt/<slug>/state`
   - range canali supportato in configurazione: `1..4`
 
 - Dimmer:
-  - cmd on/off: `cerebro2mqtt/<slug>/set`
-  - cmd brightness: `cerebro2mqtt/<slug>/brightness/set` (`0-100` o `0-255`)
-  - state on/off: `cerebro2mqtt/<slug>/state`
-  - state brightness: `cerebro2mqtt/<slug>/brightness/state` (`0-255`)
+  - cmd on/off: `algodomo2mqtt/<slug>/set`
+  - cmd brightness: `algodomo2mqtt/<slug>/brightness/set` (`0-100` o `0-255`)
+  - state on/off: `algodomo2mqtt/<slug>/state`
+  - state brightness: `algodomo2mqtt/<slug>/brightness/state` (`0-255`)
 
 - Termostato:
-  - setpoint cmd: `cerebro2mqtt/<slug>/setpoint/set`
-  - setpoint state: `cerebro2mqtt/<slug>/setpoint/state`
-  - temperatura state: `cerebro2mqtt/<slug>/temperature/state`
-  - stagione cmd: `cerebro2mqtt/<slug>/season/set` (`WINTER`/`SUMMER` o `HEAT`/`COOL`)
-  - stagione state: `cerebro2mqtt/<slug>/season/state`
-  - clima mode state (per entita thermostat HA): `cerebro2mqtt/<slug>/climate/mode/state` (`heat`/`cool`)
+  - setpoint cmd: `algodomo2mqtt/<slug>/setpoint/set`
+  - setpoint state: `algodomo2mqtt/<slug>/setpoint/state`
+  - temperatura state: `algodomo2mqtt/<slug>/temperature/state`
+  - stagione cmd: `algodomo2mqtt/<slug>/season/set` (`WINTER`/`SUMMER` o `HEAT`/`COOL`)
+  - stagione state: `algodomo2mqtt/<slug>/season/state`
+  - clima mode state (per entita thermostat HA): `algodomo2mqtt/<slug>/climate/mode/state` (`heat`/`cool`)
 
 Per debug polling grezzo:
-- `cerebro2mqtt/<slug>/polling/raw`
-- disponibilita scheda: `cerebro2mqtt/<slug>/availability` (`online`/`offline`)
+- `algodomo2mqtt/<slug>/polling/raw`
+- disponibilita scheda: `algodomo2mqtt/<slug>/availability` (`online`/`offline`)
 
 Esito azioni (ack dal BUS):
-- `cerebro2mqtt/<slug>/action/result` (JSON con `action`, `success`, `detail`)
+- `algodomo2mqtt/<slug>/action/result` (JSON con `action`, `success`, `detail`)
 
 ## Home Assistant
 
@@ -201,8 +201,8 @@ Ogni entita usa `availability_topic`: al reconnect parte `online` (per evitare s
 
 Entita create:
 
-- Pulsante `Cerebro Polling` (globale)
-- Pulsante `Cerebro Restart Service` (globale)
+- Pulsante `AlgoDomo Polling` (globale)
+- Pulsante `AlgoDomo Restart Service` (globale)
 - Pulsante polling per ogni scheda
 - `light` per `luci` (uno per ogni canale nel range configurato)
 - `cover` per `tapparelle` (uno per canale se configuri un range)
@@ -252,7 +252,7 @@ sudo systemctl disable --now serial-getty@ttyS0.service
 3. Riavvia il servizio bridge:
 
 ```bash
-sudo systemctl restart cerebro2mqtt.service
+sudo systemctl restart algodomo2mqtt.service
 ```
 
 4. Verifica parametri UART:

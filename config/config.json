@@ -12,8 +12,8 @@
     "port": 1883,
     "username": "",
     "password": "",
-    "client_id": "cerebro2mqtt",
-    "base_topic": "cerebro2mqtt",
+    "client_id": "algodomo2mqtt",
+    "base_topic": "algodomo2mqtt",
     "discovery_prefix": "homeassistant",
     "keepalive": 60
   },
@@ -26,7 +26,7 @@
     "port": 80
   },
   "service": {
-    "restart_command": "systemctl restart cerebro2mqtt.service"
+    "restart_command": "systemctl restart algodomo2mqtt.service"
   },
   "boards": []
 }

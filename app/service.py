@@ -952,32 +952,32 @@ class BridgeService:
         base = self._config.mqtt.base_topic
         discovery_prefix = self._config.mqtt.discovery_prefix
 
-        poll_button_topic = f"{discovery_prefix}/button/cerebro2mqtt_poll_all/config"
+        poll_button_topic = f"{discovery_prefix}/button/algodomo2mqtt_poll_all/config"
         poll_button_payload = {
-            "name": "Cerebro Polling",
-            "unique_id": "cerebro2mqtt_poll_all",
+            "name": "AlgoDomo Polling",
+            "unique_id": "algodomo2mqtt_poll_all",
             "command_topic": f"{base}/poll_all/set",
             "payload_press": "PRESS",
             "icon": "mdi:refresh",
             "device": {
-                "identifiers": ["cerebro2mqtt_bridge"],
-                "name": "Cerebro2MQTT Bridge",
+                "identifiers": ["algodomo2mqtt_bridge"],
+                "name": "AlgoDomo2MQTT Bridge",
                 "manufacturer": "AlgoDomo",
                 "model": "BUS-MQTT",
             },
         }
         self._publish(poll_button_topic, poll_button_payload, retain=True)
 
-        restart_button_topic = f"{discovery_prefix}/button/cerebro2mqtt_restart_service/config"
+        restart_button_topic = f"{discovery_prefix}/button/algodomo2mqtt_restart_service/config"
         restart_button_payload = {
-            "name": "Cerebro Restart Service",
-            "unique_id": "cerebro2mqtt_restart_service",
+            "name": "AlgoDomo Restart Service",
+            "unique_id": "algodomo2mqtt_restart_service",
             "command_topic": f"{base}/service/restart/set",
             "payload_press": "PRESS",
             "icon": "mdi:restart",
             "device": {
-                "identifiers": ["cerebro2mqtt_bridge"],
-                "name": "Cerebro2MQTT Bridge",
+                "identifiers": ["algodomo2mqtt_bridge"],
+                "name": "AlgoDomo2MQTT Bridge",
                 "manufacturer": "AlgoDomo",
                 "model": "BUS-MQTT",
             },
@@ -997,16 +997,16 @@ class BridgeService:
         topic_prefix = f"{base}/{slug}"
         availability_topic = self._availability_topic(board)
         device = {
-            "identifiers": [f"cerebro2mqtt_{board.board_id}"],
+            "identifiers": [f"algodomo2mqtt_{board.board_id}"],
             "name": board.name,
             "manufacturer": "AlgoDomo",
             "model": _board_type_model_label(board.board_type),
         }
 
-        poll_button_topic = f"{discovery_prefix}/button/cerebro2mqtt_{board.board_id}_poll/config"
+        poll_button_topic = f"{discovery_prefix}/button/algodomo2mqtt_{board.board_id}_poll/config"
         poll_button_payload = {
             "name": f"{board.name} Polling",
-            "unique_id": f"cerebro2mqtt_{board.board_id}_poll",
+            "unique_id": f"algodomo2mqtt_{board.board_id}_poll",
             "command_topic": f"{topic_prefix}/poll/set",
             "payload_press": "PRESS",
             "icon": "mdi:refresh",
@@ -1023,19 +1023,19 @@ class BridgeService:
             for channel in all_channels:
                 # Cleanup discovery legacy: in versioni precedenti le luci erano pubblicate come switch.
                 self._publish(
-                    f"{discovery_prefix}/switch/cerebro2mqtt_{board.board_id}_ch{channel}/config",
+                    f"{discovery_prefix}/switch/algodomo2mqtt_{board.board_id}_ch{channel}/config",
                     "",
                     retain=True,
                 )
 
-                config_topic = f"{discovery_prefix}/light/cerebro2mqtt_{board.board_id}_ch{channel}/config"
+                config_topic = f"{discovery_prefix}/light/algodomo2mqtt_{board.board_id}_ch{channel}/config"
                 if channel not in channels:
                     self._publish(config_topic, "", retain=True)
                     continue
 
                 payload = {
                     "name": f"{board.name} CH{channel}",
-                    "unique_id": f"cerebro2mqtt_{board.board_id}_ch{channel}",
+                    "unique_id": f"algodomo2mqtt_{board.board_id}_ch{channel}",
                     "command_topic": f"{topic_prefix}/ch/{channel}/set",
                     "state_topic": f"{topic_prefix}/ch/{channel}/state",
                     "payload_on": "ON",
@@ -1053,10 +1053,10 @@ class BridgeService:
             channels = set(board.channels)
 
             if len(channels) == 1:
-                config_topic = f"{discovery_prefix}/cover/cerebro2mqtt_{board.board_id}/config"
+                config_topic = f"{discovery_prefix}/cover/algodomo2mqtt_{board.board_id}/config"
                 payload = {
                     "name": board.name,
-                    "unique_id": f"cerebro2mqtt_{board.board_id}",
+                    "unique_id": f"algodomo2mqtt_{board.board_id}",
                     "command_topic": f"{topic_prefix}/set",
                     "state_topic": f"{topic_prefix}/state",
                     "payload_open": "OPEN",
@@ -1078,22 +1078,22 @@ class BridgeService:
 
                 for channel in all_channels:
                     self._publish(
-                        f"{discovery_prefix}/cover/cerebro2mqtt_{board.board_id}_ch{channel}/config",
+                        f"{discovery_prefix}/cover/algodomo2mqtt_{board.board_id}_ch{channel}/config",
                         "",
                         retain=True,
                     )
                 return
 
-            self._publish(f"{discovery_prefix}/cover/cerebro2mqtt_{board.board_id}/config", "", retain=True)
+            self._publish(f"{discovery_prefix}/cover/algodomo2mqtt_{board.board_id}/config", "", retain=True)
             for channel in all_channels:
-                config_topic = f"{discovery_prefix}/cover/cerebro2mqtt_{board.board_id}_ch{channel}/config"
+                config_topic = f"{discovery_prefix}/cover/algodomo2mqtt_{board.board_id}_ch{channel}/config"
                 if channel not in channels:
                     self._publish(config_topic, "", retain=True)
                     continue
 
                 payload = {
                     "name": f"{board.name} CH{channel}",
-                    "unique_id": f"cerebro2mqtt_{board.board_id}_ch{channel}",
+                    "unique_id": f"algodomo2mqtt_{board.board_id}_ch{channel}",
                     "command_topic": f"{topic_prefix}/ch/{channel}/set",
                     "state_topic": f"{topic_prefix}/ch/{channel}/state",
                     "payload_open": "OPEN",
@@ -1115,10 +1115,10 @@ class BridgeService:
             return
 
         if board.board_type == BoardType.DIMMER:
-            config_topic = f"{discovery_prefix}/light/cerebro2mqtt_{board.board_id}/config"
+            config_topic = f"{discovery_prefix}/light/algodomo2mqtt_{board.board_id}/config"
             payload = {
                 "name": board.name,
-                "unique_id": f"cerebro2mqtt_{board.board_id}",
+                "unique_id": f"algodomo2mqtt_{board.board_id}",
                 "command_topic": f"{topic_prefix}/set",
                 "state_topic": f"{topic_prefix}/state",
                 "brightness_command_topic": f"{topic_prefix}/brightness/set",
@@ -1134,10 +1134,10 @@ class BridgeService:
             return
 
         if board.board_type == BoardType.THERMOSTAT:
-            temp_sensor_topic = f"{discovery_prefix}/sensor/cerebro2mqtt_{board.board_id}_temperature/config"
+            temp_sensor_topic = f"{discovery_prefix}/sensor/algodomo2mqtt_{board.board_id}_temperature/config"
             temp_sensor_payload = {
                 "name": f"{board.name} Temperatura",
-                "unique_id": f"cerebro2mqtt_{board.board_id}_temperature",
+                "unique_id": f"algodomo2mqtt_{board.board_id}_temperature",
                 "state_topic": f"{topic_prefix}/polling/raw",
                 "value_template": "{{ value_json.temperature }}",
                 "unit_of_measurement": "°C",
@@ -1150,10 +1150,10 @@ class BridgeService:
             }
             self._publish(temp_sensor_topic, temp_sensor_payload, retain=True)
 
-            climate_topic = f"{discovery_prefix}/climate/cerebro2mqtt_{board.board_id}/config"
+            climate_topic = f"{discovery_prefix}/climate/algodomo2mqtt_{board.board_id}/config"
             climate_payload = {
                 "name": board.name,
-                "unique_id": f"cerebro2mqtt_{board.board_id}",
+                "unique_id": f"algodomo2mqtt_{board.board_id}",
                 "mode_command_topic": f"{topic_prefix}/season/set",
                 "mode_state_topic": f"{topic_prefix}/climate/mode/state",
                 "modes": ["heat", "cool"],
@@ -1173,12 +1173,12 @@ class BridgeService:
 
             # Cleanup entita legacy (setpoint number + season select) se presenti da versioni precedenti.
             self._publish(
-                f"{discovery_prefix}/number/cerebro2mqtt_{board.board_id}_setpoint/config",
+                f"{discovery_prefix}/number/algodomo2mqtt_{board.board_id}_setpoint/config",
                 "",
                 retain=True,
             )
             self._publish(
-                f"{discovery_prefix}/select/cerebro2mqtt_{board.board_id}_season/config",
+                f"{discovery_prefix}/select/algodomo2mqtt_{board.board_id}_season/config",
                 "",
                 retain=True,
             )
@@ -1188,7 +1188,7 @@ class BridgeService:
         discovery_prefix = self._config.mqtt.discovery_prefix
 
         self._publish(
-            f"{discovery_prefix}/button/cerebro2mqtt_{board.board_id}_poll/config",
+            f"{discovery_prefix}/button/algodomo2mqtt_{board.board_id}_poll/config",
             "",
             retain=True,
         )
@@ -1196,49 +1196,49 @@ class BridgeService:
         if board.board_type == BoardType.LIGHTS:
             for channel in range(1, 9):
                 self._publish(
-                    f"{discovery_prefix}/switch/cerebro2mqtt_{board.board_id}_ch{channel}/config",
+                    f"{discovery_prefix}/switch/algodomo2mqtt_{board.board_id}_ch{channel}/config",
                     "",
                     retain=True,
                 )
                 self._publish(
-                    f"{discovery_prefix}/light/cerebro2mqtt_{board.board_id}_ch{channel}/config",
+                    f"{discovery_prefix}/light/algodomo2mqtt_{board.board_id}_ch{channel}/config",
                     "",
                     retain=True,
                 )
             return
 
         if board.board_type == BoardType.SHUTTERS:
-            self._publish(f"{discovery_prefix}/cover/cerebro2mqtt_{board.board_id}/config", "", retain=True)
+            self._publish(f"{discovery_prefix}/cover/algodomo2mqtt_{board.board_id}/config", "", retain=True)
             for channel in range(1, 5):
                 self._publish(
-                    f"{discovery_prefix}/cover/cerebro2mqtt_{board.board_id}_ch{channel}/config",
+                    f"{discovery_prefix}/cover/algodomo2mqtt_{board.board_id}_ch{channel}/config",
                     "",
                     retain=True,
                 )
             return
 
         if board.board_type == BoardType.DIMMER:
-            self._publish(f"{discovery_prefix}/light/cerebro2mqtt_{board.board_id}/config", "", retain=True)
+            self._publish(f"{discovery_prefix}/light/algodomo2mqtt_{board.board_id}/config", "", retain=True)
             return
 
         if board.board_type == BoardType.THERMOSTAT:
             self._publish(
-                f"{discovery_prefix}/sensor/cerebro2mqtt_{board.board_id}_temperature/config",
+                f"{discovery_prefix}/sensor/algodomo2mqtt_{board.board_id}_temperature/config",
                 "",
                 retain=True,
             )
             self._publish(
-                f"{discovery_prefix}/climate/cerebro2mqtt_{board.board_id}/config",
+                f"{discovery_prefix}/climate/algodomo2mqtt_{board.board_id}/config",
                 "",
                 retain=True,
             )
             self._publish(
-                f"{discovery_prefix}/number/cerebro2mqtt_{board.board_id}_setpoint/config",
+                f"{discovery_prefix}/number/algodomo2mqtt_{board.board_id}_setpoint/config",
                 "",
                 retain=True,
             )
             self._publish(
-                f"{discovery_prefix}/select/cerebro2mqtt_{board.board_id}_season/config",
+                f"{discovery_prefix}/select/algodomo2mqtt_{board.board_id}_season/config",
                 "",
                 retain=True,
             )

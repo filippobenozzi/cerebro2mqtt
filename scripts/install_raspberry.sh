@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="${APP_NAME:-cerebro2mqtt}"
-INSTALL_DIR="${INSTALL_DIR:-/opt/cerebro2mqtt}"
+APP_NAME="${APP_NAME:-algodomo2mqtt}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/algodomo2mqtt}"
 SERVICE_NAME="${SERVICE_NAME:-${APP_NAME}.service}"
 APP_USER="${APP_USER:-root}"
 APP_GROUP="${APP_GROUP:-${APP_USER}}"
@@ -131,7 +131,7 @@ install_systemd_service() {
 
   cat > "${SERVICE_FILE}" <<UNIT
 [Unit]
-Description=Cerebro2MQTT bridge service
+Description=AlgoDomo2MQTT bridge service
 After=network-online.target
 Wants=network-online.target
 
@@ -140,7 +140,7 @@ Type=simple
 User=${APP_USER}
 Group=${APP_GROUP}
 WorkingDirectory=${INSTALL_DIR}
-Environment=CEREBRO_CONFIG=${INSTALL_DIR}/${CONFIG_REL_PATH}
+Environment=ALGODOMO_CONFIG=${INSTALL_DIR}/${CONFIG_REL_PATH}
 Environment=LOG_LEVEL=INFO
 ExecStart=${INSTALL_DIR}/.venv/bin/python -m app.main
 ExecStartPre=/bin/sh -c 'systemctl stop serial-getty@${port_name}.service 2>/dev/null || true'

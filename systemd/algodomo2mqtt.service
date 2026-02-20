@@ -1,12 +1,12 @@
 [Unit]
-Description=Cerebro2MQTT bridge service
+Description=AlgoDomo2MQTT bridge service
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/cerebro2mqtt
-Environment=CEREBRO_CONFIG=/opt/cerebro2mqtt/config/config.json
+WorkingDirectory=/opt/algodomo2mqtt
+Environment=ALGODOMO_CONFIG=/opt/algodomo2mqtt/config/config.json
 Environment=LOG_LEVEL=INFO
 ExecStart=/usr/bin/python3 -m app.main
 ExecStartPre=/bin/sh -c 'systemctl stop serial-getty@ttyS0.service 2>/dev/null || true'
